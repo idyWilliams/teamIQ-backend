@@ -5,8 +5,12 @@ name = "pypi"
 
 [packages]
 fastapi = {extras = ["standard"], version = "*"}
+sqlalchemy = "*"
+psycopg2-binary = "*"
+python-dotenv = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.12"
+python_version = "3.13"
+python_full_version = "3.13.7"
