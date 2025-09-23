@@ -15,3 +15,4 @@ app.include_router(items_router, prefix="/api/v1")
 @app.get("/")
 def root():
     return {"message": "Welcome to Teamiq Backend"}
+
