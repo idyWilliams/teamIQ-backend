@@ -114,7 +114,9 @@ def compute_and_upsert_dashboard_metrics(db: Session, user_id: str):
 def get_cached_dashboard(db: Session, user_id: str):
     return db.query(DashboardMetrics).filter(DashboardMetrics.user_id == user_id).first()
 
-# ---- Org-level computations ----
+
+# organisational computations
+
 def compute_org_metrics(db: Session, org_id: str):
     """Aggregate intern dashboards for an organization and upsert into org_dashboard_metrics."""
     if User is None:
@@ -137,7 +139,7 @@ def compute_org_metrics(db: Session, org_id: str):
 
         intern_summaries.append({
             "user_id": intern.id,
-            "name": getattr(intern, "name", ""),
+            "name": f"{intern.first_name or ""} {intern.last_name or ""}".strip(),
             "completion_rate": float(metrics.completion_rate or 0),
             "skills_tracked": metrics.skills_tracked
         })

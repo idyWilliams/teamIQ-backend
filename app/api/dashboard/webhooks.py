@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.api.dashboard import services
-from app.api.users.models import LinkedAccount  # Adjust import to your linked accounts model
+#fromapp.api.users.models import LinkedAccount  # Adjust import to your linked accounts model
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
 

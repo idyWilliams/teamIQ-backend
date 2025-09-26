@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, String
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql import func
 from app.db.database import Base
 
@@ -17,8 +17,8 @@ class DashboardMetrics(Base):
 
     overall_score = Column(Float, default=0.0, nullable=False)  # E.g., 70.0 out of 100
 
-    skills_summary = Column(JSONB, default={})  # E.g., {"React": 80.0, "Typescript": 80.0, "Communicate": 80.0, "Python": 80.0, "Design": 80.0, "Micro Services": 80.0}; use percentages
-    contributions_timeseries = Column(JSONB, default=[])  # E.g., [{"date": "2025-09-25", "commits": 2},] 
+    skills_summary = Column(JSON, default={})  # E.g., {"React": 80.0, "Typescript": 80.0, "Communicate": 80.0, "Python": 80.0, "Design": 80.0, "Micro Services": 80.0}; use percentages
+    contributions_timeseries = Column(JSON, default=[])  # E.g., [{"date": "2025-09-25", "commits": 2},] 
 
     last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -39,10 +39,10 @@ class OrgDashboardMetrics(Base):
     task_completion_trend = Column(Float, default=0.0, nullable=False)  # E.g., 65.0 (percentage trend)
 
     # Project Status Section
-    project_summaries = Column(JSONB, default={})  # E.g., {"Mobile App v2.0": {"status": "In Progress", "next": "Beta", "release": "Jun 25"}, ...}
+    project_summaries = Column(JSON, default={})  # E.g., {"Mobile App v2.0": {"status": "In Progress", "next": "Beta", "release": "Jun 25"}, ...}
 
     # Team Section
-    team_member_summary = Column(JSONB, default=[])  # E.g., [{"name": "Jacob Jones", "tasks": 12, "last_seen": "12:12"}, ...]
-    active_blockers = Column(JSONB, default=[])  # E.g., [{"user": "Alex", "reason": "Blocked on API dependencies", "duration": "2hours"}, ...]
+    team_member_summary = Column(JSON, default=[])  # E.g., [{"name": "Jacob Jones", "tasks": 12, "last_seen": "12:12"}, ...]
+    active_blockers = Column(JSON, default=[])  # E.g., [{"user": "Alex", "reason": "Blocked on API dependencies", "duration": "2hours"}, ...]
 
     last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

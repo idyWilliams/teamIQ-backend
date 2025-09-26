@@ -3,9 +3,9 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-
+from app.api.crud.users import get_user_by_email
 from app.db.database import get_db
-from app.api.crud.user import get_user_by_email
+from app.api.crud.users import get_user_by_email
 from app.api.users.utils.auth_utils import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -43,3 +43,11 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+# Basic require_role implementation /Fatma/
+def require_role(role: str):
+    def role_checker(current_user=Depends(get_current_user)):
+        if not hasattr(current_user, 'role') or current_user.role != role:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return current_user
+    return role_checker

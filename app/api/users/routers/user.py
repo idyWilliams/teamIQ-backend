@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.users.schemas.user import UserCreate, UserOut, OrganizationCreate, OrganizationOut, Token
 from app.api.users.utils.auth_utils import verify_password
 
-from app.api.crud.user import (
+from app.api.crud.users import (
     create_user,
     get_user_by_email,
     create_organization,

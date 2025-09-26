@@ -1,21 +1,17 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.api.dashboard import services, schemas
+from app.api.users.dependencies.auth import get_current_user  # Updated import
 
-
-
-# Adjust these imports to your user dependency modules
-try:
-    from app.api.users.dependencies import get_current_user, require_role
-except Exception:
-    # Replace with your actual user dependency imports
-    def get_current_user(): raise NotImplementedError
-    def require_role(role): raise NotImplementedError
-
-
-    
+# Basic require_role implementation
+def require_role(role: str):
+    def role_checker(current_user=Depends(get_current_user)):
+        if not hasattr(current_user, 'role') or current_user.role != role:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return current_user
+    return role_checker
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -46,7 +42,6 @@ def get_home_dashboard(background_tasks: BackgroundTasks, db: Session = Depends(
 
 @router.get("/mentor/{intern_id}", response_model=schemas.DashboardResponse, dependencies=[Depends(require_role("mentor"))])
 def get_intern_dashboard(intern_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    # Ensure mentor can view this intern (add relationship check if needed)
     metrics = services.get_cached_dashboard(db, intern_id)
     if not metrics:
         metrics = services.compute_and_upsert_dashboard_metrics(db, intern_id)

@@ -5,7 +5,7 @@ from datetime import timedelta
 from app.db.database import get_db
 from app.api.users.utils.auth_utils import ACCESS_TOKEN_EXPIRE_MINUTES, verify_password
 from app.api.users.dependencies.auth import create_access_token
-from app.api.crud.user import (
+from app.api.crud.users import (
     create_user,
     get_user_by_email,
     create_organization,
