@@ -1,31 +1,71 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
+from app.api.users.models.user import UserRole
+from typing import Optional
 
-class UserBase(BaseModel):
-    username: str
-    email: str
-
-class UserBase(BaseModel):
+# --------------------
+# Request Schemas
+# --------------------
+class UserCreate(BaseModel):
+    first_name: str
+    last_name: str
     username: str
     email: EmailStr
-
-class UserCreate(UserBase):
+    country: str
     password: str
-    is_organization: bool = False
+    repeatpassword: str
 
-class UserLogin(UserBase):
+    @validator("repeatpassword")
+    def passwords_match(cls, v, values, **kwargs):
+        if "password" in values and v != values["password"]:
+            raise ValueError("Passwords do not match")
+        return v
+
+
+class OrganizationCreate(BaseModel):
+    organization_name: str
+    team_size: int
     password: str
+    repeatpassword: str
 
-class UserOut(UserBase):
+    @validator("repeatpassword")
+    def passwords_match(cls, v, values, **kwargs):
+        if "password" in values and v != values["password"]:
+            raise ValueError("Passwords do not match")
+        return v
+
+    @validator("team_size")
+    def valid_team_size(cls, v):
+        allowed_sizes = [2, 3, 5, 8, 10, 15, 20, 50, 100]
+        if v not in allowed_sizes:
+            raise ValueError(f"Team size must be one of {allowed_sizes}")
+        return v
+
+# --------------------
+# Response Schemas
+# --------------------
+class UserOut(BaseModel):
     id: int
-    is_verified: bool
-    is_organization: bool
+    email: EmailStr
+    username: str
+    first_name: str
+    last_name: str
+    country: str
+    role: UserRole
 
     class Config:
-        from_attributes = True
-        
-    class UserResponse(UserBase):
-        id: int
+        orm_mode = True  # ✅ allows returning SQLAlchemy models directly
+
+
+class OrganizationOut(BaseModel):
+    id: int
+    organization_name: str
+    team_size: int
+    role: UserRole
 
     class Config:
         orm_mode = True
 
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
