@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from app.db.database import Base, engine
 from app.api.users.routes.user import router as users_router
 from app.api.items.routes.item import router as items_router
+from app.api.dashboard.routes import router as dashboard_router
+from app.api.dashboard.webhooks import router as integrations_router
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -16,3 +18,6 @@ app.include_router(items_router, prefix="/api/v1")
 def root():
     return {"message": "Welcome to Teamiq Backend"}
 
+# after creating FastAPI app:
+app.include_router(dashboard_router)
+app.include_router(integrations_router)
