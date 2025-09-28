@@ -1,5 +1,7 @@
 from dotenv import load_dotenv
 import os
+from pydantic_settings import BaseSettings
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -15,4 +17,13 @@ class Settings:
     ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+    MAIL_USERNAME: str = os.getenv("MAIL_USERNAME")
+    MAIL_PASSWORD: str = os.getenv("MAIL_PASSWORD")
+    MAIL_FROM: str = os.getenv("MAIL_FROM")
+    MAIL_PORT: int = os.getenv("MAIL_PORT")
+    MAIL_SERVER: str = os.getenv("MAIL_SERVER")
+    class Config:
+        env_file = ".env"
+
 settings = Settings()
+

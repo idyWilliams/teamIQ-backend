@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, constr, field_validator, ValidationInfo
 from app.api.users.models.user import UserRole
 from typing import Optional
 
@@ -11,12 +11,13 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     country: str
-    password: str
+    password: constr(min_length=8, max_length=72)  # type: ignore
     repeatpassword: str
 
-    @validator("repeatpassword")
-    def passwords_match(cls, v, values, **kwargs):
-        if "password" in values and v != values["password"]:
+    @field_validator("repeatpassword")
+    def passwords_match(cls, v: str, info: ValidationInfo):
+        password = info.data.get("password")
+        if password and v != password:
             raise ValueError("Passwords do not match")
         return v
 
@@ -27,13 +28,14 @@ class OrganizationCreate(BaseModel):
     password: str
     repeatpassword: str
 
-    @validator("repeatpassword")
-    def passwords_match(cls, v, values, **kwargs):
-        if "password" in values and v != values["password"]:
+    @field_validator("repeatpassword")
+    def passwords_match(cls, v: str, info: ValidationInfo):
+        password = info.data.get("password")
+        if password and v != password:
             raise ValueError("Passwords do not match")
         return v
 
-    @validator("team_size")
+    @field_validator("team_size")
     def valid_team_size(cls, v):
         allowed_sizes = [2, 3, 5, 8, 10, 15, 20, 50, 100]
         if v not in allowed_sizes:
@@ -53,7 +55,8 @@ class UserOut(BaseModel):
     role: UserRole
 
     class Config:
-        orm_mode = True  # ✅ allows returning SQLAlchemy models directly
+        # orm_mode = True  # ✅ allows returning SQLAlchemy models directly
+        from_attributes = True
 
 
 class OrganizationOut(BaseModel):
@@ -63,9 +66,17 @@ class OrganizationOut(BaseModel):
     role: UserRole
 
     class Config:
-        orm_mode = True
+        # orm_mode = True
+        from_attributes = True
 
 
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str

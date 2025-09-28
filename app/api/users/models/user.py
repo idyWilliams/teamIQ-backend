@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Enum
+from sqlalchemy import Column, Integer, String, Boolean, Enum, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from enum import Enum as PyEnum 
 from app.db.database import Base
@@ -32,6 +32,7 @@ class Organization(Base):
     team_size = Column(Integer, nullable = False)
     hashed_password = Column(String, nullable = False)
     role = Column(Enum(UserRole), default = UserRole.ORGANIZATION, nullable = False)
+    
     
     
     

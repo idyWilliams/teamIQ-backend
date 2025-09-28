@@ -1,26 +1,46 @@
-from datetime import datetime, timedelta
-from jose import jwt
+from datetime import datetime, timedelta, timezone
+from jose import jwt, JWTError
 import os
 from dotenv import load_dotenv
-
+from passlib.context import CryptContext
+from fastapi import HTTPException
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY")
+# SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+import secrets
+SECRET_KEY = secrets.token_urlsafe(32)
+print(SECRET_KEY)
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def create_reset_token(email: str):
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode = {"sub": email, "exp": expire}
+    return jwt.encode(to_encode, SECRET_KEY, ALGORITHM)
+
+
+def verify_reset_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, ALGORITHM)
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=400, detail="Invalid token")
+        return email
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
 
 
 def get_password_hash(password: str) -> str:
@@ -29,3 +49,5 @@ def get_password_hash(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
+    

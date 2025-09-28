@@ -17,8 +17,15 @@ def create_user(db: Session, user: UserCreate):
     db_user = get_user_by_email(db, user.email)
     if db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+    print(db_user)
+    try:
+        hashed_pw = get_password_hash(user.password)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password too long (must be ≤ 72 characters)."
+        )
 
-    hashed_pw = get_password_hash(user.password)
     new_user = User(
         email=user.email,
         first_name=user.first_name,
