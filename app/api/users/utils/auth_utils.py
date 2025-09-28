@@ -7,13 +7,11 @@ from fastapi import HTTPException
 
 load_dotenv()
 
-# SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 import secrets
-SECRET_KEY = secrets.token_urlsafe(32)
-print(SECRET_KEY)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
