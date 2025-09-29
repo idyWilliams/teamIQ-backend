@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
-from app.models.project import Item as Project
-from app.schemas.project import ItemCreate as ProjectCreate
+# from app.models.project import Item as Project
+from app.models.project import Project
+from app.schemas.project import  ProjectCreate
 
 def create_project(db: Session, project: ProjectCreate):
     new_project = Project(name=project.name, owner_id=project.owner_id)
