@@ -25,7 +25,7 @@ class DashboardMetrics(Base):
 class OrgDashboardMetrics(Base):
     __tablename__ = "org_dashboard_metrics"
 
-    org_id = Column(String, ForeignKey("organizations.id"), primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), primary_key=True, index=True)
 
     team_members = Column(Integer, default=0, nullable=False)
     active_projects = Column(Integer, default=0, nullable=False)
