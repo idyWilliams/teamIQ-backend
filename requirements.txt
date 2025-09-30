@@ -19,6 +19,7 @@ jinja2==3.1.6; python_version >= '3.7'
 markdown-it-py==4.0.0; python_version >= '3.10'
 markupsafe==3.0.2; python_version >= '3.9'
 mdurl==0.1.2; python_version >= '3.7'
+passlib[bcrypt]
 psycopg2-binary==2.9.10; python_version >= '3.8'
 pydantic[email]==2.11.7; python_version >= '3.9'
 pydantic-core==2.33.2; python_version >= '3.9'
