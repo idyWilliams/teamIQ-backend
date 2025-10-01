@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from app.core.database import Base, engine
 
 # Import all models to ensure tables are created
-from app.models import user, organization, project, task, dashboard, integration
 
 from app.api.v1 import users as users_router
 from app.api.v1 import organizations as organizations_router
@@ -11,6 +10,10 @@ from app.api.v1 import projects as projects_router
 from app.api.v1 import tasks as tasks_router
 from app.api.v1 import dashboard as dashboard_router
 from app.api.v1 import integrations as integrations_router
+
+# Logger setup
+import logging
+from pythonjsonlogger import jsonlogger
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -29,3 +32,14 @@ app.include_router(integrations_router.router, prefix="/api/v1")
 @app.get("/")
 def root():
     return {"message": "Welcome to Teamiq Backend"}
+
+
+
+
+
+logger = logging.getLogger("app_logger")
+logger.setLevel(logging.INFO)
+logHandler = logging.FileHandler("logs/app_logger.log")
+formatter = jsonlogger.JsonFormatter()
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)

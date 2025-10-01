@@ -1,6 +1,5 @@
 from pydantic import BaseModel, EmailStr, validator
-from typing import Optional
-from app.models.organization import UserRole
+from app.models.user import UserRole
 
 # --------------------
 # Request Schemas

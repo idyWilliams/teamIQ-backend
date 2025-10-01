@@ -16,6 +16,13 @@ from app.models.user import User, UserRole
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
 from app.core.config import settings
+from app.models.user import User, UserRole
+import logging
+logger = logging.getLogger("app_logger")
+
+logger.info("This is an info log!", extra={"module": "user_service"})
+logger.error("This is an error log!", extra={"error": "something bad happened"})
+
 
 router = APIRouter(tags=["auth"])
 
