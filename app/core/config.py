@@ -4,7 +4,7 @@ import os
 load_dotenv()
 
 class Settings:
-    DATABASE_URL = "sqlite:///team_iq.db"
+    DATABASE_URL = os.getenv("DATABASE_URL") #connects with the postgresql database in .env
     SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-for-jwt")
     GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
     GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
