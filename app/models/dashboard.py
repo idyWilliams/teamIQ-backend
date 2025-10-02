@@ -6,7 +6,7 @@ from app.core.database import Base
 class DashboardMetrics(Base):
     __tablename__ = "dashboard_metrics"
 
-    user_id = Column(String, ForeignKey("users.id"), primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
     active_projects = Column(Integer, default=0, nullable=False)
     overall_progress = Column(Integer, default=0, nullable=False)
     skills_tracked = Column(Integer, default=0, nullable=False)
@@ -25,8 +25,8 @@ class DashboardMetrics(Base):
 class OrgDashboardMetrics(Base):
     __tablename__ = "org_dashboard_metrics"
 
-    org_id = Column(String, ForeignKey("organizations.id"), primary_key=True, index=True)
-    
+    org_id = Column(Integer, ForeignKey("organizations.id"), primary_key=True, index=True)
+
     team_members = Column(Integer, default=0, nullable=False)
     active_projects = Column(Integer, default=0, nullable=False)
     tasks_completed = Column(Integer, default=0, nullable=False)
