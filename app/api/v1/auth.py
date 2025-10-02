@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.schemas.user import UserCreate, UserOut, OrganizationCreate, OrganizationOut, Token
-from app.core.security import verify_password, create_access_token
+from app.core.security import verify_password, get_password_hash, create_access_token, create_reset_token, verify_reset_token
+from app.core.email_utils import send_email
+from app.schemas.user import PasswordResetConfirm, PasswordResetRequest
 from app.repositories import user_repository
 from app.core.database import get_db
 from authlib.integrations.starlette_client import OAuth
@@ -112,3 +114,26 @@ async def callback_google(request: Request, db: Session = Depends(get_db)):
         return {"access_token": access_token, "token_type": "bearer"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+    # Forgot Password for User
+@router.post("/forgot-password")
+async def forgot_password(data: PasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No user found with this email")
+    token = create_reset_token(data.email)
+    reset_link = f"http://localhost:8000/reset-password/{token}"
+    await send_email(email=data.email, reset_link=reset_link)
+    return {"Message": "Password reset link sent to email"}
+
+# Reset Password for User 
+@router.post("/reset-password")
+async def reset_password(data: PasswordResetConfirm, db: Session = Depends(get_db)):
+    email = verify_reset_token(data.token)
+    if email:
+        user = db.query(User).filter(User.email == email).first()
+        hashed_password = get_password_hash(data.new_password)
+        user.hashed_password = hashed_password
+        db.commit()
+        return {"message": "User password reset successful"}
+    return
