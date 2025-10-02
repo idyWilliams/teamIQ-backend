@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, validator
-from app.models.user import UserRole
 from typing import Optional
+from app.models.organization import UserRole
 
 # --------------------
 # Request Schemas
@@ -11,6 +11,7 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     country: str
+    role: Optional[UserRole] = UserRole.INTERN
     password: str
     repeatpassword: str
 
