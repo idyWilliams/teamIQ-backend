@@ -8,6 +8,9 @@ fastapi = {extras = ["standard"], version = "*"}
 sqlalchemy = "*"
 psycopg2-binary = "*"
 python-dotenv = "*"
+python-jose = {extras = ["cryptography"], version = "*"}
+passlib = "*"
+authlib = "*"
 
 [dev-packages]
 

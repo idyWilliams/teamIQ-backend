@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 from app.api.users.models.user import User, Organization
 import os
 from dotenv import load_dotenv
-from app.api.users.utils.email_utils import send_email
-from app.api.users.schemas.user import PasswordResetRequest, PasswordResetConfirm
+from app.core.email_utils import send_email
+from app.api.users.s.user import PasswordResetRequest, PasswordResetConfirm
 from app.api.users.utils.auth_utils import pwd_context
 from app.api.users.utils.auth_utils import get_password_hash, create_reset_token, verify_reset_token
 from app.db.database import get_db

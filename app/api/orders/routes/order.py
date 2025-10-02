@@ -1,3 +1,0 @@
-from fastapi import APIRouter
-
-order_router = APIRouter()
