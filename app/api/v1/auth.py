@@ -9,6 +9,7 @@ from app.schemas.user import PasswordResetConfirm, PasswordResetRequest
 from app.repositories import user_repository, organization_repository
 from app.core.database import get_db
 from app.models.user import User, UserRole
+from typing import Any
 
 # OAuth (Google login)
 from authlib.integrations.starlette_client import OAuth
