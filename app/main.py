@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from pathlib import Path
 from app.core.database import Base, engine
 
 # Import all models to ensure tables are created
@@ -39,7 +40,12 @@ def root():
 
 logger = logging.getLogger("app_logger")
 logger.setLevel(logging.INFO)
-logHandler = logging.FileHandler("logs/app_logger.log")
-formatter = jsonlogger.JsonFormatter()
-logHandler.setFormatter(formatter)
-logger.addHandler(logHandler)
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+# logHandler = logging.FileHandler(LOG_DIR / "app_logger.log")
+# formatter = jsonlogger.JsonFormatter()
+# logHandler.setFormatter(formatter)
+# logger.addHandler(logHandler)
