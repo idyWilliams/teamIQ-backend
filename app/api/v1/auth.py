@@ -12,14 +12,20 @@ from app.repositories import user_repository, organization_repository
 from app.core.database import get_db
 from app.models.user import User, UserRole
 
-# OAuth (keeps your Google login)
+# OAuth (Google login)
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
 from app.core.config import settings
 
+# -------------------------
+# Router setup
+# -------------------------
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger(__name__)
 
-# OAuth setup (uses settings from your config)
+# -------------------------
+# OAuth setup
+# -------------------------
 config = Config(environ={
     "GITHUB_CLIENT_ID": settings.GITHUB_CLIENT_ID,
     "GITHUB_CLIENT_SECRET": settings.GITHUB_CLIENT_SECRET,
@@ -40,15 +46,12 @@ oauth.register(
     client_kwargs={"scope": "openid email profile"},
 )
 
-
 # -------------------------
 # Registration endpoints
 # -------------------------
 @router.post("/register/individual", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register_individual(user: UserCreate, db: Session = Depends(get_db)) -> Any:
-    """
-    Create an individual user.
-    """
+    """Create an individual user."""
     existing = user_repository.get_user_by_email(db, user.email)
     if existing:
         raise HTTPException(status_code=400, detail="User with this email already exists")
@@ -62,18 +65,20 @@ def register_individual(user: UserCreate, db: Session = Depends(get_db)) -> Any:
         import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail="Internal server error")
 
-router = APIRouter()
-logger = logging.getLogger(__name__)
 
 @router.post("/register/organization", response_model=OrganizationOut, status_code=status.HTTP_201_CREATED)
 def register_organization(organization: OrganizationCreate, db: Session = Depends(get_db)):
+    """Create an organization user."""
     logger.info(f"Received organization data: {organization.dict()}")
     logger.info(f"Using UserRole enum: {[(e.name, e.value) for e in UserRole]}")
+
     if organization_repository.get_organization_by_name(db, organization.organization_name):
         raise HTTPException(status_code=400, detail="Organization with this name already exists")
+
     if getattr(organization, "email", None):
         if organization_repository.get_organization_by_email(db, organization.email):
             raise HTTPException(status_code=400, detail="Organization with this email already exists")
+
     try:
         db_org = organization_repository.create_organization(db, organization)
         logger.info(f"Created organization: {db_org.organization_name}, role: {db_org.role}")
@@ -82,17 +87,12 @@ def register_organization(organization: OrganizationCreate, db: Session = Depend
         logger.error(f"Error creating organization: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-
-
 # -------------------------
 # Login endpoints
 # -------------------------
 @router.post("/login/individual", response_model=Token)
 def login_individual(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Any:
-    """
-    Login for individual users.
-    Use content-type application/x-www-form-urlencoded (OAuth2PasswordRequestForm).
-    """
+    """Login for individual users."""
     user = user_repository.get_user_by_email(db, form_data.username)
     if not user or not user.hashed_password:
         raise HTTPException(
@@ -114,10 +114,7 @@ def login_individual(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessi
 
 @router.post("/login/organization", response_model=Token)
 def login_organization(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Any:
-    """
-    Login for organizations (username can be organization_name or email).
-    Use content-type application/x-www-form-urlencoded.
-    """
+    """Login for organizations (username can be organization_name or email)."""
     org = organization_repository.get_organization_by_name(db, form_data.username)
     if not org:
         org = organization_repository.get_organization_by_email(db, form_data.username)
@@ -139,13 +136,12 @@ def login_organization(form_data: OAuth2PasswordRequestForm = Depends(), db: Ses
     access_token = create_access_token(data={"sub": str(org.id), "role": org.role.value})
     return {"access_token": access_token, "token_type": "bearer"}
 
-
 # -------------------------
 # Google OAuth endpoints
 # -------------------------
 @router.get("/login/google")
 async def login_google(request: Request):
-    redirect_uri = request.url_for("auth:google_callback")
+    redirect_uri = request.url_for("google_callback")
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
