@@ -13,7 +13,7 @@ class User(Base):
     country = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(
-        SQLEnum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]),
+        Enum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]),
         default=UserRole.INTERN,
         nullable=False
     )
