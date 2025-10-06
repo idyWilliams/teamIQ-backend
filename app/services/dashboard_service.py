@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta
+from typing import Dict, List
 
 from app.models.dashboard import DashboardMetrics, OrgDashboardMetrics
 from app.models.task import Task
@@ -13,7 +14,7 @@ from app.models.user import User
 Skill = None
 UserSkill = None
 
-def compute_task_stats(db: Session, user_id: str):
+def compute_task_stats(db: Session, user_id: int) -> Dict[str, float]:
     """Count total/completed/pending tasks and compute completion rate with trend."""
     if Task is None:
         return {"tasks_total": 0, "tasks_completed": 0, "tasks_pending": 0, "completion_rate": 0.0, "completion_rate_change": 0.0}
@@ -23,14 +24,24 @@ def compute_task_stats(db: Session, user_id: str):
     pending = total - completed
     rate = (completed / total * 100) if total else 0.0
 
+    # Simple trend: compare last 7 days vs previous 7 days
     since = datetime.utcnow() - timedelta(days=7)
     prev_since = since - timedelta(days=7)
-    recent_completed = db.query(func.count(Task.id)).filter(Task.owner_id == user_id, Task.status == "done", Task.completed_at >= since).scalar() or 0
-    prev_completed = db.query(func.count(Task.id)).filter(Task.owner_id == user_id, Task.status == "done", Task.completed_at >= prev_since, Task.completed_at < since).scalar() or 0
-    change = ((recent_completed - prev_completed) / prev_completed * 100) if prev_completed else 0.0 if not recent_completed else 100.0
+    recent_completed = db.query(func.count(Task.id)).filter(
+        Task.owner_id == user_id, 
+        Task.status == "done", 
+        Task.completed_at >= since
+    ).scalar() or 0
+    prev_completed = db.query(func.count(Task.id)).filter(
+        Task.owner_id == user_id, 
+        Task.status == "done", 
+        Task.completed_at >= prev_since, 
+        Task.completed_at < since
+    ).scalar() or 0
+    change = ((recent_completed - prev_completed) / prev_completed * 100) if prev_completed else (100.0 if recent_completed else 0.0)
     return {"tasks_total": total, "tasks_completed": completed, "tasks_pending": pending, "completion_rate": rate, "completion_rate_change": change}
 
-def compute_skill_summary(db: Session, user_id: str):
+def compute_skill_summary(db: Session, user_id: int) -> Dict[str, float]:
     """Return dict {skill_name: level} for a user."""
     if Skill is None or UserSkill is None:
         return {}
@@ -43,7 +54,7 @@ def compute_skill_summary(db: Session, user_id: str):
     )
     return {name: float(level) for name, level in rows}
 
-def compute_timeseries(db: Session, user_id: str, days: int = 30):
+def compute_timeseries(db: Session, user_id: int, days: int = 30) -> List[Dict[str, any]]:
     """Tasks completed per day (last `days`)."""
     if Task is None:
         return []
@@ -58,7 +69,7 @@ def compute_timeseries(db: Session, user_id: str, days: int = 30):
     )
     return [{"date": row.day.date().isoformat(), "commits": int(row[1])} for row in rows]
 
-def compute_project_stats(db: Session, user_id: str):
+def compute_project_stats(db: Session, user_id: int) -> Dict[str, int]:
     """Count active projects and overall progress (e.g., avg pct_complete)."""
     if Project is None:
         return {"active_projects": 0, "overall_progress": 0}
@@ -67,7 +78,7 @@ def compute_project_stats(db: Session, user_id: str):
     progress = db.query(func.avg(Project.pct_complete)).filter(Project.owner_id == user_id).scalar() or 0.0
     return {"active_projects": active, "overall_progress": int(progress)}
 
-def compute_and_upsert_dashboard_metrics(db: Session, user_id: str):
+def compute_and_upsert_dashboard_metrics(db: Session, user_id: int):
     """Compute per-user metrics and upsert into dashboard_metrics."""
     task_stats = compute_task_stats(db, user_id)
     skills = compute_skill_summary(db, user_id)
@@ -95,10 +106,10 @@ def compute_and_upsert_dashboard_metrics(db: Session, user_id: str):
     db.refresh(metrics)
     return metrics
 
-def get_cached_dashboard(db: Session, user_id: str):
+def get_cached_dashboard(db: Session, user_id: int):
     return db.query(DashboardMetrics).filter(DashboardMetrics.user_id == user_id).first()
 
-def compute_org_metrics(db: Session, org_id: str):
+def compute_org_metrics(db: Session, org_id: int):
     """Aggregate intern dashboards for an organization and upsert into org_dashboard_metrics."""
     if User is None:
         return None
@@ -160,5 +171,5 @@ def compute_org_metrics(db: Session, org_id: str):
     db.refresh(org_metrics)
     return org_metrics
 
-def get_cached_org_dashboard(db: Session, org_id: str):
+def get_cached_org_dashboard(db: Session, org_id: int):
     return db.query(OrgDashboardMetrics).filter(OrgDashboardMetrics.org_id == org_id).first()

@@ -4,43 +4,38 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import Any
 import logging
-from app.core.email_utils import send_email
-from app.schemas.user import UserCreate, UserOut, Token, PasswordResetConfirm, PasswordResetRequest
-from app.schemas.organization import OrganizationCreate, OrganizationOut
-from app.core.security import verify_password, create_access_token, create_reset_token, verify_reset_token, get_password_hash
-from app.repositories import user_repository, organization_repository
-from app.core.database import get_db
-from app.models.user import User, UserRole
 
-# OAuth (Google login)
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
+
+from app.schemas.user import UserCreate, UserOut, Token
+from app.schemas.organization import OrganizationCreate, OrganizationOut
+from app.core.security import verify_password, create_access_token
+from app.repositories import user_repository, organization_repository
+from app.core.database import get_db
 from app.core.config import settings
 from app.models.user import User, UserRole
-import logging
-logger = logging.getLogger("app_logger")
 
-logger.info("This is an info log!", extra={"module_name": "user_service"})
-logger.error("This is an error log!", extra={"error": "something bad happened"})
-
+logger = logging.getLogger(__name__)
 
 # -------------------------
 # Router setup
 # -------------------------
 router = APIRouter(tags=["auth"])
-logger = logging.getLogger(__name__)
 
 # -------------------------
 # OAuth setup
 # -------------------------
-config = Config(environ={
-    "GITHUB_CLIENT_ID": settings.GITHUB_CLIENT_ID,
-    "GITHUB_CLIENT_SECRET": settings.GITHUB_CLIENT_SECRET,
-    "GOOGLE_CLIENT_ID": settings.GOOGLE_CLIENT_ID,
-    "GOOGLE_CLIENT_SECRET": settings.GOOGLE_CLIENT_SECRET,
-    "MICROSOFT_CLIENT_ID": settings.MICROSOFT_CLIENT_ID,
-    "MICROSOFT_CLIENT_SECRET": settings.MICROSOFT_CLIENT_SECRET
-})
+config = Config(
+    environ={
+        "GITHUB_CLIENT_ID": settings.GITHUB_CLIENT_ID,
+        "GITHUB_CLIENT_SECRET": settings.GITHUB_CLIENT_SECRET,
+        "GOOGLE_CLIENT_ID": settings.GOOGLE_CLIENT_ID,
+        "GOOGLE_CLIENT_SECRET": settings.GOOGLE_CLIENT_SECRET,
+        "MICROSOFT_CLIENT_ID": settings.MICROSOFT_CLIENT_ID,
+        "MICROSOFT_CLIENT_SECRET": settings.MICROSOFT_CLIENT_SECRET,
+    }
+)
 oauth = OAuth(config)
 
 oauth.register(
@@ -59,17 +54,14 @@ oauth.register(
 @router.post("/register/individual", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register_individual(user: UserCreate, db: Session = Depends(get_db)) -> Any:
     """Create an individual user."""
-    existing = user_repository.get_user_by_email(db, user.email)
-    if existing:
-        raise HTTPException(status_code=400, detail="User with this email already exists")
-
     try:
-        db_user = user_repository.create_user(db, user)
+        # Pass role from schema to create_user
+        db_user = user_repository.create_user(db, user, role=user.role)
         return db_user
     except HTTPException:
         raise
     except Exception as e:
-        import traceback; traceback.print_exc()
+        logger.exception("Failed to register individual user")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -88,11 +80,12 @@ def register_organization(organization: OrganizationCreate, db: Session = Depend
 
     try:
         db_org = organization_repository.create_organization(db, organization)
-        logger.info(f"Created organization: {db_org.organization_name}, role: {db_org.role}")
+        logger.info(f"Created organization: {db_org.organization_name}, role: {getattr(db_org, 'role', None)}")
         return db_org
     except Exception as e:
-        logger.error(f"Error creating organization: {str(e)}")
+        logger.exception("Error creating organization")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
 
 # -------------------------
 # Login endpoints
@@ -101,7 +94,7 @@ def register_organization(organization: OrganizationCreate, db: Session = Depend
 def login_individual(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Any:
     """Login for individual users."""
     user = user_repository.get_user_by_email(db, form_data.username)
-    if not user or not user.hashed_password:
+    if not user or not getattr(user, "hashed_password", None):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -115,7 +108,7 @@ def login_individual(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessi
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
+    access_token = create_access_token(data={"sub": user.email, "role": getattr(user.role, "value", user.role)})
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -126,7 +119,7 @@ def login_organization(form_data: OAuth2PasswordRequestForm = Depends(), db: Ses
     if not org:
         org = organization_repository.get_organization_by_email(db, form_data.username)
 
-    if not org or not org.hashed_password:
+    if not org or not getattr(org, "hashed_password", None):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect organization name/email or password",
@@ -140,8 +133,9 @@ def login_organization(form_data: OAuth2PasswordRequestForm = Depends(), db: Ses
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(data={"sub": str(org.id), "role": org.role.value})
+    access_token = create_access_token(data={"sub": getattr(org, "email", org.organization_name), "role": getattr(org.role, "value", org.role)})
     return {"access_token": access_token, "token_type": "bearer"}
+
 
 # -------------------------
 # Google OAuth endpoints
@@ -178,30 +172,10 @@ async def callback_google(request: Request, db: Session = Depends(get_db)):
             db.refresh(new_user)
             user = new_user
 
-        access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
+        access_token = create_access_token(data={"sub": user.email, "role": getattr(user.role, "value", user.role)})
         return {"access_token": access_token, "token_type": "bearer"}
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("Google callback error")
         raise HTTPException(status_code=500, detail=str(e))
-    
-    # Forgot Password for User
-@router.post("/forgot-password")
-async def forgot_password(data: PasswordResetRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="No user found with this email")
-    token = create_reset_token(data.email)
-    reset_link = f"http://localhost:8000/reset-password/{token}"
-    await send_email(email=data.email, reset_link=reset_link)
-    return {"Message": "Password reset link sent to email"}
-
-# Reset Password for User 
-@router.post("/reset-password")
-async def reset_password(data: PasswordResetConfirm, db: Session = Depends(get_db)):
-    email = verify_reset_token(data.token)
-    if email:
-        user = db.query(User).filter(User.email == email).first()
-        hashed_password = get_password_hash(data.new_password)
-        user.hashed_password = hashed_password
-        db.commit()
-        return {"message": "User password reset successful"}
-    return
