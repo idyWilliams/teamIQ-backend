@@ -1,14 +1,6 @@
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo
 from typing import Optional
-from enum import Enum
-
-# --------------------
-# Enum for User Roles
-# --------------------
-class UserRole(str, Enum):
-    INTERN = "intern"
-    MENTOR = "mentor"
-    ORGANIZATION = "organization"  # If needed for orgs
+from app.models.user import UserRole
 
 # --------------------
 # Request Schemas
@@ -19,13 +11,14 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     country: str
-    role: UserRole = UserRole.INTERN  # Default to intern, optional override
+    role: Optional[UserRole] = UserRole.INTERN
     password: str
     repeatpassword: str
 
-    @validator("repeatpassword")
-    def passwords_match(cls, v, values, **kwargs):
-        if "password" in values and v != values["password"]:
+    @field_validator("repeatpassword")
+    def passwords_match(cls, v: str, info: ValidationInfo):
+        password = info.data.get("password")
+        if password and v != password:
             raise ValueError("Passwords do not match")
         return v
 
@@ -36,13 +29,14 @@ class OrganizationCreate(BaseModel):
     password: str
     repeatpassword: str
 
-    @validator("repeatpassword")
-    def passwords_match(cls, v, values, **kwargs):
-        if "password" in values and v != values["password"]:
+    @field_validator("repeatpassword")
+    def passwords_match(cls, v: str, info: ValidationInfo):
+        password = info.data.get("password")
+        if password and v != password:
             raise ValueError("Passwords do not match")
         return v
 
-    @validator("team_size")
+    @field_validator("team_size")
     def valid_team_size(cls, v):
         allowed_sizes = [2, 3, 5, 8, 10, 15, 20, 50, 100]
         if v not in allowed_sizes:
@@ -62,7 +56,8 @@ class UserOut(BaseModel):
     role: UserRole
 
     class Config:
-        orm_mode = True  # Allows returning SQLAlchemy models directly
+        # orm_mode = True 
+        from_attributes = True
 
 
 class OrganizationOut(BaseModel):
@@ -72,9 +67,19 @@ class OrganizationOut(BaseModel):
     role: UserRole
 
     class Config:
-        orm_mode = True
+        # orm_mode = True
+        from_attributes = True
 
 
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+
