@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Enum
+from sqlalchemy import Column, Integer, String, Enum, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.models.organization import UserRole
+from sqlalchemy.sql import func
 
 class User(Base):
     __tablename__ = "users"
@@ -17,5 +18,9 @@ class User(Base):
         default=UserRole.INTERN,
         nullable=False
     )
+    organization_id = Column(Integer, ForeignKey("organizations.id"))
+    organization = relationship("Organization")
     tasks = relationship("Task", back_populates="owner")
     projects = relationship("Project", back_populates="owner")
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
+    updatedAt = Column(DateTime(timezone=True), onupdate=func.now())

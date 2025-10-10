@@ -5,6 +5,7 @@ from app.core.database import Base
 from app.models.organization import UserRole
 from sqlalchemy.types import Enum as SQLEnum
 import datetime
+from sqlalchemy.sql import func
 
 class Invitation(Base):
     __tablename__ = "invitations"
@@ -22,3 +23,5 @@ class Invitation(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"))
 
     organization = relationship("Organization")
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
+    updatedAt = Column(DateTime(timezone=True), onupdate=func.now())

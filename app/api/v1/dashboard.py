@@ -32,6 +32,7 @@ def get_home_dashboard(background_tasks: BackgroundTasks, db: Session = Depends(
         "skills_summary": [{"skill": k, "level": v} for k, v in (metrics.skills_summary or {}).items()],
         "contributions_timeseries": metrics.contributions_timeseries or [],
         "last_updated": metrics.last_updated,
+        "createdAt": metrics.createdAt
     }
     return create_response(success=True, message="Dashboard retrieved successfully", data=data)
 
@@ -55,6 +56,7 @@ def get_intern_dashboard(intern_id: str, background_tasks: BackgroundTasks, db: 
         "skills_summary": [{"skill": k, "level": v} for k, v in (metrics.skills_summary or {}).items()],
         "contributions_timeseries": metrics.contributions_timeseries or [],
         "last_updated": metrics.last_updated,
+        "createdAt": metrics.createdAt
     }
     return create_response(success=True, message="Dashboard retrieved successfully", data=data)
 
@@ -80,5 +82,6 @@ def get_org_dashboard(org_id: str, background_tasks: BackgroundTasks, db: Sessio
         "team_member_summary": org_metrics.team_member_summary or [],
         "active_blockers": org_metrics.active_blockers or [],
         "last_updated": org_metrics.last_updated,
+        "createdAt": org_metrics.createdAt
     }
     return create_response(success=True, message="Dashboard retrieved successfully", data=data)

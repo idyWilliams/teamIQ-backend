@@ -18,6 +18,7 @@ class InvitationOut(BaseModel):
     expires_at: datetime.datetime
     accepted: bool
     organization_id: int
+    createdAt: datetime.datetime
 
     class Config:
         from_attributes = True

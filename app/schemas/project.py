@@ -1,14 +1,15 @@
 from pydantic import BaseModel
+import datetime
 
-class ProjectBase(BaseModel):
+class ProjectCreate(BaseModel):
     name: str
-
-class ProjectCreate(ProjectBase):
     owner_id: int
 
-class ProjectResponse(ProjectBase):
+class ProjectResponse(BaseModel):
     id: int
+    name: str
     owner_id: int
+    createdAt: datetime.datetime
+
     class Config:
-        # orm_mode = True
         from_attributes = True

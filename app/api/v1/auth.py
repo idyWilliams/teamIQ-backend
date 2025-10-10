@@ -109,7 +109,7 @@ def login_individual(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessi
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
+    access_token = create_access_token(data={"sub": user.email, "role": user.role.value})
     return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer").model_dump())
 
 
@@ -134,7 +134,7 @@ def login_organization(form_data: OAuth2PasswordRequestForm = Depends(), db: Ses
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(data={"sub": str(org.id), "role": org.role.value})
+    access_token = create_access_token(data={"sub": org.email, "role": org.role.value})
     return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer").model_dump())
 
 # -------------------------
@@ -172,7 +172,7 @@ async def callback_google(request: Request, db: Session = Depends(get_db)):
             db.refresh(new_user)
             user = new_user
 
-        access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
+        access_token = create_access_token(data={"sub": user.email, "role": user.role.value})
         return create_response(success=True, message="Google login successful", data=Token(access_token=access_token, token_type="bearer").model_dump())
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

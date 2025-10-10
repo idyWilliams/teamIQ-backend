@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.types import Enum as SQLEnum
 from app.core.database import Base
 from enum import Enum as PyEnum
+from sqlalchemy.sql import func
 
 class UserRole(PyEnum):
     INTERN = "intern"
@@ -19,3 +20,5 @@ class Organization(Base):
         SQLEnum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]),
         nullable=False
     )
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
+    updatedAt = Column(DateTime(timezone=True), onupdate=func.now())

@@ -22,7 +22,7 @@ def create_invitation(
     """
     Create and send an invitation to a new user.
     """
-    if not current_user:
+    if not isinstance(current_user, Organization):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to create an invitation.",
@@ -37,8 +37,9 @@ def create_invitation(
         email_to=db_invitation.email,
         invitation_code=db_invitation.invitation_code,
     )
-
-    return create_response(success=True, message="Invitation sent successfully", data=InvitationOut.from_orm(db_invitation).model_dump())
+    invitation_out = InvitationOut.from_orm(db_invitation)
+    invitation_out.createdAt = db_invitation.createdAt
+    return create_response(success=True, message="Invitation sent successfully", data=invitation_out.model_dump())
 
 @router.post("/accept")
 def accept_invitation(
@@ -56,7 +57,7 @@ def accept_invitation(
             detail="Invalid or expired invitation code.",
         )
 
-    user = user_repository.create_user(db, user_create)
+    user = user_repository.create_user(db, user_create, organization_id=invitation.organization_id)
     
     invitation.accepted = True
     db.commit()

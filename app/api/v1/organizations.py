@@ -3,18 +3,21 @@ from sqlalchemy.orm import Session
 from app.schemas.organization import OrganizationCreate, OrganizationOut
 from app.models.organization import Organization
 from app.core.database import get_db
-from app.core.security import get_password_hash
+from app.core.hashing import get_password_hash
 from app.schemas.response_model import create_response
+from app.core.security import get_current_user_or_organization
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 # GET organization by ID
 @router.get("/{organization_id}")
-def read_organization(organization_id: int, db: Session = Depends(get_db)):
+def read_organization(organization_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user_or_organization)):
     db_org = db.query(Organization).filter(Organization.id == organization_id).first()
     if db_org is None:
         raise HTTPException(status_code=404, detail="Organization not found")
-    return create_response(success=True, message="Organization retrieved successfully", data=OrganizationOut.from_orm(db_org).model_dump())
+    org_out = OrganizationOut.from_orm(db_org)
+    org_out.createdAt = db_org.createdAt
+    return create_response(success=True, message="Organization retrieved successfully", data=org_out.model_dump())
 
 
 # POST register organization
@@ -43,4 +46,6 @@ def register_organization(org: OrganizationCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(db_org)
 
-    return create_response(success=True, message="Organization registered successfully", data=OrganizationOut.from_orm(db_org).model_dump())
+    org_out = OrganizationOut.from_orm(db_org)
+    org_out.createdAt = db_org.createdAt
+    return create_response(success=True, message="Organization registered successfully", data=org_out.model_dump())

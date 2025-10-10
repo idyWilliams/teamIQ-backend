@@ -12,7 +12,7 @@ def get_user_by_email(db: Session, email: str):
     return db.query(User).filter(User.email == email).first()
 
 
-def create_user(db: Session, user: UserCreate):
+def create_user(db: Session, user: UserCreate, organization_id: int = None):
     db_user = get_user_by_email(db, user.email)
     if db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
@@ -32,6 +32,7 @@ def create_user(db: Session, user: UserCreate):
         country=user.country,
         hashed_password=hashed_pw,
         role=UserRole.INTERN,
+        organization_id=organization_id,
     )
 
     try:

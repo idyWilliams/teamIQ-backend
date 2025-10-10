@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo
 from typing import Optional
 from app.models.user import UserRole
+import datetime
 
 # --------------------
 # Request Schemas
@@ -54,6 +55,8 @@ class UserOut(BaseModel):
     last_name: str
     country: str
     role: UserRole
+    createdAt: datetime.datetime
+    organization_id: Optional[int] = None
 
     class Config:
         # orm_mode = True 
@@ -81,5 +84,3 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str
-
-
