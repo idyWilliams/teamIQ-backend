@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.services import dashboard_service
 from app.models.integration import LinkedAccount
 from app.core.config import settings
+from app.schemas.response_model import create_response
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -48,4 +49,4 @@ async def github_webhook(request: Request, x_hub_signature_256: str = Header(Non
     if org_id:
         background_tasks.add_task(dashboard_service.compute_org_metrics, db, org_id)
 
-    return {"ok": True}
+    return create_response(success=True, message="Webhook received successfully")

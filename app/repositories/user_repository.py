@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate
-from app.core.security import get_password_hash
+from app.core.hashing import get_password_hash
 
 
 def get_user_by_email(db: Session, email: str):

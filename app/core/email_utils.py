@@ -22,4 +22,12 @@ async def send_email(email: str, reset_link: str):
     fm = FastMail(conf)
     await fm.send_message(message)
 
-
+async def send_invitation_email(email_to: str, invitation_code: str):
+    message = MessageSchema(
+        subject="You have been invited to join TeamIQ",
+        recipients=[email_to],
+        body=f"You have been invited to join TeamIQ. Your invitation code is: {invitation_code}",
+        subtype="plain",
+    )
+    fm = FastMail(conf)
+    await fm.send_message(message)

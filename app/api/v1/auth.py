@@ -7,10 +7,12 @@ import logging
 from app.core.email_utils import send_email
 from app.schemas.user import UserCreate, UserOut, Token, PasswordResetConfirm, PasswordResetRequest
 from app.schemas.organization import OrganizationCreate, OrganizationOut
-from app.core.security import verify_password, create_access_token, create_reset_token, verify_reset_token, get_password_hash
+from app.core.security import create_access_token, create_reset_token, verify_reset_token
+from app.core.hashing import get_password_hash, verify_password
 from app.repositories import user_repository, organization_repository
 from app.core.database import get_db
 from app.models.user import User, UserRole
+from app.schemas.response_model import create_response
 
 # OAuth (Google login)
 from authlib.integrations.starlette_client import OAuth
@@ -19,10 +21,6 @@ from app.core.config import settings
 from app.models.user import User, UserRole
 import logging
 logger = logging.getLogger("app_logger")
-
-logger.info("This is an info log!", extra={"module_name": "user_service"})
-logger.error("This is an error log!", extra={"error": "something bad happened"})
-
 
 # -------------------------
 # Router setup
@@ -56,7 +54,7 @@ oauth.register(
 # -------------------------
 # Registration endpoints
 # -------------------------
-@router.post("/register/individual", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post("/register/individual", status_code=status.HTTP_201_CREATED)
 def register_individual(user: UserCreate, db: Session = Depends(get_db)) -> Any:
     """Create an individual user."""
     existing = user_repository.get_user_by_email(db, user.email)
@@ -65,7 +63,7 @@ def register_individual(user: UserCreate, db: Session = Depends(get_db)) -> Any:
 
     try:
         db_user = user_repository.create_user(db, user)
-        return db_user
+        return create_response(success=True, message="User created successfully", data=UserOut.from_orm(db_user).model_dump())
     except HTTPException:
         raise
     except Exception as e:
@@ -73,12 +71,9 @@ def register_individual(user: UserCreate, db: Session = Depends(get_db)) -> Any:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/register/organization", response_model=OrganizationOut, status_code=status.HTTP_201_CREATED)
+@router.post("/register/organization", status_code=status.HTTP_201_CREATED)
 def register_organization(organization: OrganizationCreate, db: Session = Depends(get_db)):
     """Create an organization user."""
-    logger.info(f"Received organization data: {organization.dict()}")
-    logger.info(f"Using UserRole enum: {[(e.name, e.value) for e in UserRole]}")
-
     if organization_repository.get_organization_by_name(db, organization.organization_name):
         raise HTTPException(status_code=400, detail="Organization with this name already exists")
 
@@ -88,8 +83,7 @@ def register_organization(organization: OrganizationCreate, db: Session = Depend
 
     try:
         db_org = organization_repository.create_organization(db, organization)
-        logger.info(f"Created organization: {db_org.organization_name}, role: {db_org.role}")
-        return db_org
+        return create_response(success=True, message="Organization created successfully", data=OrganizationOut.from_orm(db_org).model_dump())
     except Exception as e:
         logger.error(f"Error creating organization: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
@@ -97,7 +91,7 @@ def register_organization(organization: OrganizationCreate, db: Session = Depend
 # -------------------------
 # Login endpoints
 # -------------------------
-@router.post("/login/individual", response_model=Token)
+@router.post("/login/individual")
 def login_individual(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Any:
     """Login for individual users."""
     user = user_repository.get_user_by_email(db, form_data.username)
@@ -116,10 +110,10 @@ def login_individual(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessi
         )
 
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer").model_dump())
 
 
-@router.post("/login/organization", response_model=Token)
+@router.post("/login/organization")
 def login_organization(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Any:
     """Login for organizations (username can be organization_name or email)."""
     org = organization_repository.get_organization_by_name(db, form_data.username)
@@ -141,7 +135,7 @@ def login_organization(form_data: OAuth2PasswordRequestForm = Depends(), db: Ses
         )
 
     access_token = create_access_token(data={"sub": str(org.id), "role": org.role.value})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer").model_dump())
 
 # -------------------------
 # Google OAuth endpoints
@@ -179,7 +173,7 @@ async def callback_google(request: Request, db: Session = Depends(get_db)):
             user = new_user
 
         access_token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
-        return {"access_token": access_token, "token_type": "bearer"}
+        return create_response(success=True, message="Google login successful", data=Token(access_token=access_token, token_type="bearer").model_dump())
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -192,7 +186,7 @@ async def forgot_password(data: PasswordResetRequest, db: Session = Depends(get_
     token = create_reset_token(data.email)
     reset_link = f"http://localhost:8000/reset-password/{token}"
     await send_email(email=data.email, reset_link=reset_link)
-    return {"Message": "Password reset link sent to email"}
+    return create_response(success=True, message="Password reset link sent to email")
 
 # Reset Password for User 
 @router.post("/reset-password")
@@ -203,5 +197,5 @@ async def reset_password(data: PasswordResetConfirm, db: Session = Depends(get_d
         hashed_password = get_password_hash(data.new_password)
         user.hashed_password = hashed_password
         db.commit()
-        return {"message": "User password reset successful"}
-    return
+        return create_response(success=True, message="User password reset successful")
+    return create_response(success=False, message="Invalid or expired token")

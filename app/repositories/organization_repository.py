@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError, DataError
 from fastapi import HTTPException, status
 from app.models.organization import Organization, UserRole
 from app.schemas.organization import OrganizationCreate
-from app.core.security import get_password_hash
+from app.core.hashing import get_password_hash
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
