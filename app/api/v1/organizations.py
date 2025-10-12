@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.schemas.organization import OrganizationCreate, OrganizationOut
-from app.models.organization import Organization
+from app.models.organization import Organization, UserRole
 from app.core.database import get_db
 from app.core.hashing import get_password_hash
 from app.schemas.response_model import create_response
@@ -39,7 +39,8 @@ def register_organization(org: OrganizationCreate, db: Session = Depends(get_db)
         organization_name=org.organization_name,
         team_size=org.team_size,
         email=org.email,
-        hashed_password=hashed_pw
+        hashed_password=hashed_pw,
+        role="organization"
     )
 
     db.add(db_org)
