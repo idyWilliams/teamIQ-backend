@@ -77,6 +77,8 @@ class OrganizationOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    user: Optional[UserOut] = None
+    organization: Optional[OrganizationOut] = None
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr

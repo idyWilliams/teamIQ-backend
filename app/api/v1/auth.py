@@ -110,7 +110,7 @@ def login_individual(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessi
         )
 
     access_token = create_access_token(data={"sub": user.email, "role": user.role.value})
-    return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer").model_dump())
+    return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer", user=UserOut.from_orm(user)).model_dump())
 
 
 @router.post("/login/organization")
@@ -135,7 +135,7 @@ def login_organization(form_data: OAuth2PasswordRequestForm = Depends(), db: Ses
         )
 
     access_token = create_access_token(data={"sub": org.email, "role": org.role.value})
-    return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer").model_dump())
+    return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer", organization=OrganizationOut.from_orm(org)).model_dump())
 
 # -------------------------
 # Google OAuth endpoints

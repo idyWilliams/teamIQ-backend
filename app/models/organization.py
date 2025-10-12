@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, JSON
 from sqlalchemy.types import Enum as SQLEnum
 from app.core.database import Base
 from enum import Enum as PyEnum
@@ -20,5 +20,14 @@ class Organization(Base):
         SQLEnum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]),
         nullable=False
     )
+    organization_image = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+    sector = Column(String, nullable=True)
+    social_media_handles = Column(JSON, nullable=True)
+    domain_link = Column(String, nullable=True)
+    favorite_tools = Column(JSON, nullable=True)
+    website = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    phone_number = Column(String, nullable=True)
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
     updatedAt = Column(DateTime(timezone=True), onupdate=func.now())

@@ -40,7 +40,16 @@ def register_organization(org: OrganizationCreate, db: Session = Depends(get_db)
         team_size=org.team_size,
         email=org.email,
         hashed_password=hashed_pw,
-        role="organization"
+        role="organization",
+        organization_image=org.organization_image,
+        description=org.description,
+        sector=org.sector,
+        social_media_handles=org.social_media_handles,
+        domain_link=org.domain_link,
+        favorite_tools=org.favorite_tools,
+        website=org.website,
+        address=org.address,
+        phone_number=org.phone_number
     )
 
     db.add(db_org)

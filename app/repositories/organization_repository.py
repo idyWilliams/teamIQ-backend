@@ -34,7 +34,16 @@ def create_organization(db: Session, organization: OrganizationCreate):
         team_size=organization.team_size,
         email=organization.email,
         hashed_password=hashed_pw,
-        role=UserRole.ORGANIZATION.value  # Use .value to ensure 'organization' (lowercase)
+        role=UserRole.ORGANIZATION.value,  # Use .value to ensure 'organization' (lowercase)
+        organization_image=organization.organization_image,
+        description=organization.description,
+        sector=organization.sector,
+        social_media_handles=organization.social_media_handles,
+        domain_link=organization.domain_link,
+        favorite_tools=organization.favorite_tools,
+        website=organization.website,
+        address=organization.address,
+        phone_number=organization.phone_number
     )
     try:
         db.add(new_org)
