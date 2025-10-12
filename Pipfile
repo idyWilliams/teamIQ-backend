@@ -11,6 +11,7 @@ python-dotenv = "*"
 python-jose = {extras = ["cryptography"], version = "*"}
 passlib = "*"
 authlib = "*"
+uvicorn = "*"
 
 [dev-packages]
 
