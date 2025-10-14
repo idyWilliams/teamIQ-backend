@@ -1,11 +1,9 @@
 from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo
 from typing import Optional
-from app.models.user import UserRole
+from app.models.organization import UserRole
 import datetime
+from app.models.user import User as UserModel  # Avoid conflict
 
-# --------------------
-# Request Schemas
-# --------------------
 class UserCreate(BaseModel):
     first_name: str
     last_name: str
@@ -23,12 +21,21 @@ class UserCreate(BaseModel):
             raise ValueError("Passwords do not match")
         return v
 
-
 class OrganizationCreate(BaseModel):
     organization_name: str
     team_size: int
+    email: EmailStr  # Added missing
     password: str
     repeatpassword: str
+    organization_image: Optional[str] = None
+    description: Optional[str] = None
+    sector: Optional[str] = None
+    social_media_handles: Optional[dict] = None
+    domain_link: Optional[str] = None
+    favorite_tools: Optional[dict] = None
+    website: Optional[str] = None
+    address: Optional[str] = None
+    phone_number: Optional[str] = None
 
     @field_validator("repeatpassword")
     def passwords_match(cls, v: str, info: ValidationInfo):
@@ -44,9 +51,6 @@ class OrganizationCreate(BaseModel):
             raise ValueError(f"Team size must be one of {allowed_sizes}")
         return v
 
-# --------------------
-# Response Schemas
-# --------------------
 class UserOut(BaseModel):
     id: int
     email: EmailStr
@@ -59,20 +63,27 @@ class UserOut(BaseModel):
     organization_id: Optional[int] = None
 
     class Config:
-        # orm_mode = True 
         from_attributes = True
-
 
 class OrganizationOut(BaseModel):
     id: int
     organization_name: str
     team_size: int
+    email: EmailStr
     role: UserRole
+    organization_image: Optional[str] = None
+    description: Optional[str] = None
+    sector: Optional[str] = None
+    social_media_handles: Optional[dict] = None
+    domain_link: Optional[str] = None
+    favorite_tools: Optional[dict] = None
+    website: Optional[str] = None
+    address: Optional[str] = None
+    phone_number: Optional[str] = None
+    createdAt: datetime.datetime
 
     class Config:
-        # orm_mode = True
         from_attributes = True
-
 
 class Token(BaseModel):
     access_token: str

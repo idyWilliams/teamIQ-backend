@@ -34,7 +34,7 @@ def create_organization(db: Session, organization: OrganizationCreate):
         team_size=organization.team_size,
         email=organization.email,
         hashed_password=hashed_pw,
-        role=UserRole.ORGANIZATION.value,  # Use .value to ensure 'organization' (lowercase)
+        role=UserRole.ORGANIZATION,
         organization_image=organization.organization_image,
         description=organization.description,
         sector=organization.sector,

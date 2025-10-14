@@ -1,16 +1,12 @@
-# app/repositories/user_repository.py
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
-
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate
 from app.core.hashing import get_password_hash
 
-
 def get_user_by_email(db: Session, email: str):
     return db.query(User).filter(User.email == email).first()
-
 
 def create_user(db: Session, user: UserCreate, organization_id: int = None):
     db_user = get_user_by_email(db, user.email)

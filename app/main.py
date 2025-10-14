@@ -2,28 +2,42 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pathlib import Path
 from app.core.database import Base, engine
-from app.schemas.response_model import create_response
+from app.schemas.response_model import create_response, APIResponse
 from fastapi import HTTPException
+import datetime
 
-# Import all models to ensure tables are created
+# Import models for table creation
+from app.models.user import User
+from app.models.organization import Organization
+from app.models.task import Task
+from app.models.project import Project
+from app.models.invitation import Invitation
+from app.models.integration import LinkedAccount  # Note: filename is integration.py, but import as integration
+from app.models.dashboard import DashboardMetrics, OrgDashboardMetrics
+from app.models.skill import Skill, UserSkill
+from app.models.notification import Notification
 
-from app.api.v1 import users as users_router
-from app.api.v1 import organizations as organizations_router
-from app.api.v1 import auth as auth_router
-from app.api.v1 import projects as projects_router
-from app.api.v1 import tasks as tasks_router
-from app.api.v1 import dashboard as dashboard_router
-from app.api.v1 import integrations as integrations_router
-from app.api.v1 import invitations as invitations_router
-
-# Logger setup
-import logging
-from pythonjsonlogger import jsonlogger
-
-# Create tables
+# Create all tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Teamiq Backend")
+
+# Routers (adjusted for app/api/v1/ path)
+from app.api.v1 import (
+    auth, users, organizations, projects, tasks, dashboard,
+    integrations, invitations, skills, notifications
+)
+
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
+app.include_router(organizations.router, prefix="/api/v1/organizations", tags=["organizations"])
+app.include_router(projects.router, prefix="/api/v1/projects", tags=["projects"])
+app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
+app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["integrations"])
+app.include_router(invitations.router, prefix="/api/v1/invitations", tags=["invitations"])
+app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
+app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -36,32 +50,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         ).model_dump(),
     )
 
-# Mount routers under /api/v1
-app.include_router(auth_router.router, prefix="/api/v1/auth", tags = ["auth"])
-app.include_router(users_router.router, prefix="/api/v1/users", tags = ["users"])
-app.include_router(organizations_router.router, prefix="/api/v1/organizations", tags=["organizations"])
-app.include_router(projects_router.router, prefix="/api/v1")
-app.include_router(tasks_router.router, prefix="/api/v1")
-app.include_router(dashboard_router.router, prefix="/api/v1")
-app.include_router(integrations_router.router, prefix="/api/v1")
-app.include_router(invitations_router.router, prefix="/api/v1")
-
 @app.get("/")
 def root():
     return {"message": "Welcome to Teamiq Backend"}
-
-
-
-
-
-logger = logging.getLogger("app_logger")
-logger.setLevel(logging.INFO)
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-LOG_DIR = BASE_DIR / "logs"
-LOG_DIR.mkdir(exist_ok=True)
-
-# logHandler = logging.FileHandler(LOG_DIR / "app_logger.log")
-# formatter = jsonlogger.JsonFormatter()
-# logHandler.setFormatter(formatter)
-# logger.addHandler(logHandler)
