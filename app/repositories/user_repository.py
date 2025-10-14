@@ -6,7 +6,7 @@ from app.schemas.user import UserCreate
 from app.core.hashing import get_password_hash
 
 def get_user_by_email(db: Session, email: str):
-    return db.query(User).filter(User.email == email).first()
+    return db.query(User).filter(User.email == email.lower()).first()  # Fixed: Lowercase for case-insensitivity
 
 def create_user(db: Session, user: UserCreate, organization_id: int = None):
     db_user = get_user_by_email(db, user.email)
@@ -21,7 +21,7 @@ def create_user(db: Session, user: UserCreate, organization_id: int = None):
         )
 
     new_user = User(
-        email=user.email,
+        email=user.email.lower(),  # Fixed: Store lowercase
         first_name=user.first_name,
         last_name=user.last_name,
         username=user.username,
