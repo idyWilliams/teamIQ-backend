@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel
 from typing import Optional, Any, Dict
 import datetime
@@ -8,7 +7,7 @@ class APIResponse(BaseModel):
     message: str
     errors: Optional[Dict[str, Any]] = None
     data: Optional[Any] = None
-    timestamp: datetime.datetime
+    timestamp: str  # Changed to str for JSON safety
 
 def create_response(success: bool, message: str, data: Optional[Any] = None, errors: Optional[Dict[str, Any]] = None) -> APIResponse:
     return APIResponse(
@@ -16,5 +15,5 @@ def create_response(success: bool, message: str, data: Optional[Any] = None, err
         message=message,
         data=data,
         errors=errors,
-        timestamp=datetime.datetime.now(datetime.timezone.utc)
+        timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat()  # ISO string for serialization
     )

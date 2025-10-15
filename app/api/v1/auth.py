@@ -1,201 +1,123 @@
-# app/api/v1/auth.py
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import Any
-import logging
-from app.core.email_utils import send_email
-from app.schemas.user import UserCreate, UserOut, Token, PasswordResetConfirm, PasswordResetRequest
-from app.schemas.organization import OrganizationCreate, OrganizationOut
-from app.core.security import create_access_token, create_reset_token, verify_reset_token
-from app.core.hashing import get_password_hash, verify_password
-from app.repositories import user_repository, organization_repository
 from app.core.database import get_db
-from app.models.user import User, UserRole
+from app.schemas.user import UserCreate, OrganizationCreate, Token, PasswordResetRequest, PasswordResetConfirm, UserOut, OrganizationOut, LoginRequest  # Added LoginRequest
+from app.repositories import user_repository, organization_repository
+from app.core.hashing import verify_password, get_password_hash
+from app.core.security import create_access_token, verify_reset_token, create_reset_token, ACCESS_TOKEN_EXPIRE_MINUTES  # For expiry adjust
+from app.core.email_utils import send_email
 from app.schemas.response_model import create_response
+from app.models.user import User
+from app.models.organization import Organization
+from app.repositories.invitation_repository import get_invitation_by_code, accept_invitation
+from typing import Optional
+import datetime
 
-# OAuth (Google login)
-from authlib.integrations.starlette_client import OAuth
-from starlette.config import Config
-from app.core.config import settings
-from app.models.user import User, UserRole
-import logging
-logger = logging.getLogger("app_logger")
+router = APIRouter(prefix="/auth", tags=["auth"])
 
-# -------------------------
-# Router setup
-# -------------------------
-router = APIRouter(tags=["auth"])
-logger = logging.getLogger(__name__)
-
-# -------------------------
-# OAuth setup
-# -------------------------
-config = Config(environ={
-    "GITHUB_CLIENT_ID": settings.GITHUB_CLIENT_ID,
-    "GITHUB_CLIENT_SECRET": settings.GITHUB_CLIENT_SECRET,
-    "GOOGLE_CLIENT_ID": settings.GOOGLE_CLIENT_ID,
-    "GOOGLE_CLIENT_SECRET": settings.GOOGLE_CLIENT_SECRET,
-    "MICROSOFT_CLIENT_ID": settings.MICROSOFT_CLIENT_ID,
-    "MICROSOFT_CLIENT_SECRET": settings.MICROSOFT_CLIENT_SECRET
-})
-oauth = OAuth(config)
-
-oauth.register(
-    name="google",
-    client_id=settings.GOOGLE_CLIENT_ID,
-    client_secret=settings.GOOGLE_CLIENT_SECRET,
-    authorize_url="https://accounts.google.com/o/oauth2/auth",
-    access_token_url="https://oauth2.googleapis.com/token",
-    userinfo_endpoint="https://www.googleapis.com/oauth2/v3/userinfo",
-    client_kwargs={"scope": "openid email profile"},
-)
-
-# -------------------------
-# Registration endpoints
-# -------------------------
-@router.post("/register/individual", status_code=status.HTTP_201_CREATED)
-def register_individual(user: UserCreate, db: Session = Depends(get_db)) -> Any:
-    """Create an individual user."""
-    existing = user_repository.get_user_by_email(db, user.email)
-    if existing:
-        raise HTTPException(status_code=400, detail="User with this email already exists")
-
-    try:
-        db_user = user_repository.create_user(db, user)
-        return create_response(success=True, message="User created successfully", data=UserOut.from_orm(db_user).model_dump())
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/register/organization", status_code=status.HTTP_201_CREATED)
-def register_organization(organization: OrganizationCreate, db: Session = Depends(get_db)):
-    """Create an organization user."""
-    if organization_repository.get_organization_by_name(db, organization.organization_name):
-        raise HTTPException(status_code=400, detail="Organization with this name already exists")
-
-    if getattr(organization, "email", None):
-        if organization_repository.get_organization_by_email(db, organization.email):
-            raise HTTPException(status_code=400, detail="Organization with this email already exists")
-
-    try:
-        db_org = organization_repository.create_organization(db, organization)
-        return create_response(success=True, message="Organization created successfully", data=OrganizationOut.from_orm(db_org).model_dump())
-    except Exception as e:
-        logger.error(f"Error creating organization: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-# -------------------------
-# Login endpoints
-# -------------------------
-@router.post("/login/individual")
-def login_individual(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Any:
-    """Login for individual users."""
-    user = user_repository.get_user_by_email(db, form_data.username)
-    if not user or not user.hashed_password:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    access_token = create_access_token(data={"sub": user.email, "role": user.role.value})
-    return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer", user=UserOut.from_orm(user)).model_dump())
-
-
-@router.post("/login/organization")
-def login_organization(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Any:
-    """Login for organizations (username can be organization_name or email)."""
-    org = organization_repository.get_organization_by_name(db, form_data.username)
-    if not org:
-        org = organization_repository.get_organization_by_email(db, form_data.username)
-
-    if not org or not org.hashed_password:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect organization name/email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not verify_password(form_data.password, org.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect organization name/email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    access_token = create_access_token(data={"sub": org.email, "role": org.role.value})
-    return create_response(success=True, message="Login successful", data=Token(access_token=access_token, token_type="bearer", organization=OrganizationOut.from_orm(org)).model_dump())
-
-# -------------------------
-# Google OAuth endpoints
-# -------------------------
-@router.get("/login/google")
-async def login_google(request: Request):
-    redirect_uri = request.url_for("google_callback")
-    return await oauth.google.authorize_redirect(request, redirect_uri)
-
-
-@router.get("/callback/google", name="google_callback")
-async def callback_google(request: Request, db: Session = Depends(get_db)):
-    try:
-        token = await oauth.google.authorize_access_token(request)
-        user_info = await oauth.google.get("userinfo", token=token)
-        info = user_info.json()
-        email = info.get("email")
-        if not email:
-            raise HTTPException(status_code=400, detail="Google email not provided")
-
-        user = user_repository.get_user_by_email(db, email)
-        if not user:
-            new_user = User(
-                email=email,
-                username=email.split("@")[0],
-                first_name=info.get("given_name", ""),
-                last_name=info.get("family_name", ""),
-                country="Unknown",
-                hashed_password=None,
-                role=UserRole.INTERN,
-            )
-            db.add(new_user)
-            db.commit()
-            db.refresh(new_user)
-            user = new_user
-
-        access_token = create_access_token(data={"sub": user.email, "role": user.role.value})
-        return create_response(success=True, message="Google login successful", data=Token(access_token=access_token, token_type="bearer").model_dump())
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/register/user")
+def register_user(user: UserCreate, db: Session = Depends(get_db), invitation_code: Optional[str] = Query(None)):
+    db_user = user_repository.get_user_by_email(db, user.email)
+    if db_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
     
-    # Forgot Password for User
-@router.post("/forgot-password")
-async def forgot_password(data: PasswordResetRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="No user found with this email")
-    token = create_reset_token(data.email)
-    reset_link = f"http://localhost:8000/reset-password/{token}"
-    await send_email(email=data.email, reset_link=reset_link)
-    return create_response(success=True, message="Password reset link sent to email")
+    organization_id = None
+    if invitation_code:
+        invitation = get_invitation_by_code(db, invitation_code)
+        if invitation:
+            organization_id = invitation.organization_id
+            accept_invitation(db, invitation_code, None)
+    
+    new_user = user_repository.create_user(db, user, organization_id=organization_id)
+    access_token = create_access_token(data={"sub": new_user.email})
+    return create_response(
+        success=True,
+        message="User registered successfully",
+        data=Token(access_token=access_token, token_type="bearer", user=UserOut.model_validate(new_user))
+    )
 
-# Reset Password for User 
-@router.post("/reset-password")
-async def reset_password(data: PasswordResetConfirm, db: Session = Depends(get_db)):
-    email = verify_reset_token(data.token)
-    if email:
-        user = db.query(User).filter(User.email == email).first()
-        hashed_password = get_password_hash(data.new_password)
-        user.hashed_password = hashed_password
-        db.commit()
-        return create_response(success=True, message="User password reset successful")
-    return create_response(success=False, message="Invalid or expired token")
+@router.post("/register/organization")
+def register_org(org: OrganizationCreate, db: Session = Depends(get_db)):
+    if organization_repository.get_organization_by_name(db, org.organization_name):
+        raise HTTPException(status_code=400, detail="Organization name already registered")
+    
+    new_org = organization_repository.create_organization(db, org)
+    db.commit()
+    db.refresh(new_org)
+    
+    access_token = create_access_token(data={"sub": new_org.email})
+    
+    try:
+        org_out = OrganizationOut.model_validate(new_org)
+    except Exception as e:
+        print(f"Validation error: {e}")
+        org_out = OrganizationOut.model_validate({**new_org.__dict__, 'social_media_handles': {}, 'favorite_tools': {}})
+    
+    return create_response(
+        success=True,
+        message="Organization registered successfully",
+        data=Token(access_token=access_token, token_type="bearer", organization=org_out)
+    )
+
+@router.post("/login")
+def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    # Lowercase email for lookup
+    login_email = login_data.email.lower()
+    
+    # Lookup user first, then org
+    user_obj = user_repository.get_user_by_email(db, login_email)
+    if not user_obj:
+        user_obj = organization_repository.get_organization_by_email(db, login_email)
+    
+    if not user_obj or not verify_password(login_data.password, user_obj.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+    
+    # Adjust expiry for "remember me"
+    expires_delta = datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    if login_data.remember_me:
+        expires_delta = datetime.timedelta(days=7)
+    
+    access_token = create_access_token(data={"sub": user_obj.email}, expires_delta=expires_delta)
+    
+    # Distinguish user vs org
+    if hasattr(user_obj, 'organization_name'):  # Org
+        return create_response(
+            success=True,
+            message="Login successful",
+            data=Token(access_token=access_token, token_type="bearer", organization=OrganizationOut.model_validate(user_obj))
+        )
+    else:  # User/Intern
+        return create_response(
+            success=True,
+            message="Login successful",
+            data=Token(access_token=access_token, token_type="bearer", user=UserOut.model_validate(user_obj))
+        )
+
+@router.post("/password-reset")
+async def request_reset(request: PasswordResetRequest, db: Session = Depends(get_db)):
+    # Lowercase email for lookup
+    request.email = request.email.lower()
+    
+    user_obj = user_repository.get_user_by_email(db, request.email) or organization_repository.get_organization_by_email(db, request.email)
+    if not user_obj:
+        raise HTTPException(status_code=404, detail="User not found")
+    token = create_reset_token(request.email)
+    reset_link = f"https://yourapp.com/reset?token={token}"
+    await send_email(request.email, reset_link)
+    return create_response(success=True, message="Reset email sent")
+
+@router.post("/password-reset/confirm")
+def confirm_reset(confirm: PasswordResetConfirm, db: Session = Depends(get_db)):
+    email = verify_reset_token(confirm.token)
+    user_obj = user_repository.get_user_by_email(db, email) or organization_repository.get_organization_by_email(db, email)
+    if not user_obj:
+        raise HTTPException(status_code=404, detail="User not found")
+    hashed_pw = get_password_hash(confirm.new_password)
+    user_obj.hashed_password = hashed_pw
+    db.commit()
+    return create_response(success=True, message="Password reset successful")
+
+@router.post("/accept-invitation")
+def accept_invite(invitation_code: str, user_id: int, db: Session = Depends(get_db)):
+    accept_invitation(db, invitation_code, user_id)
+    return create_response(success=True, message="Invitation accepted")
