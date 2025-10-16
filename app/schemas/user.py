@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo, model_validator
+from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo, field_serializer
 from typing import Optional
 from app.models.organization import UserRole
 import datetime
@@ -100,7 +100,14 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
-# ... (Keep all existing classes unchanged until OrganizationOut)
+    @field_serializer('createdAt')
+    def serialize_dt(self, dt: datetime.datetime, _info):
+        return dt.isoformat()
+
+    @field_serializer('role')
+    def serialize_role(self, role: UserRole, _info):
+        return role.value
+
 
 class OrganizationOut(BaseModel):
     id: int
@@ -121,30 +128,6 @@ class OrganizationOut(BaseModel):
 
     class Config:
         from_attributes = True
-
-    @model_validator(mode='before')
-    def parse_json_fields(cls, values):
-        # Handle both dict (payload) and ORM object (DB load)
-        if hasattr(values, '__dict__'):  # ORM object
-            values = values.__dict__.copy()  # Extract attrs to dict
-        if not isinstance(values, dict):
-            values = {}  # Fallback
-        
-        # Parse JSON strings to dicts
-        for field in ['social_media_handles', 'favorite_tools']:
-            val = values.get(field)
-            if isinstance(val, str):
-                try:
-                    parsed = json.loads(val)
-                    if isinstance(parsed, dict):
-                        values[field] = parsed
-                    else:
-                        values[field] = {}
-                except (json.JSONDecodeError, TypeError):
-                    values[field] = {}
-            elif val is None:
-                values[field] = {}
-        return values
 
 
 class Token(BaseModel):
