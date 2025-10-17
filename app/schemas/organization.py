@@ -59,16 +59,16 @@ class OrganizationOut(BaseModel):
     def parse_json_fields(cls, values):
         # Force parse JSON strings to dicts (handles DB load as str)
         for field in ['social_media_handles', 'favorite_tools']:
-            val = values.get(field)
+            val = getattr(values, field, None)
             if isinstance(val, str):
                 try:
                     parsed = json.loads(val)
                     if isinstance(parsed, dict):
-                        values[field] = parsed
+                        setattr(values, field, parsed)
                     else:
-                        values[field] = {}
+                        setattr(values, field, {})
                 except (json.JSONDecodeError, TypeError):
-                    values[field] = {}
+                    setattr(values, field, {})
             elif val is None:
-                values[field] = {}
+                setattr(values, field, {})
         return values
