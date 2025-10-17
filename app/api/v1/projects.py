@@ -8,7 +8,7 @@ from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 from app.models.project import ProjectStatus
 
-router = APIRouter(prefix="/projects", tags=["projects"])
+router = APIRouter(tags=["projects"])
 
 @router.post("/")
 def create_project(project: ProjectCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user_or_organization)):

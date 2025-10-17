@@ -8,7 +8,7 @@ from app.schemas.response_model import create_response
 from app.models.user import User
 from app.models.organization import Organization
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+router = APIRouter(tags=["dashboard"])
 
 @router.get("/user")
 def get_user_dashboard(db: Session = Depends(get_db), current_user=Depends(get_current_user_or_organization)):

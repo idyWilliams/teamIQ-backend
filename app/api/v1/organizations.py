@@ -6,7 +6,7 @@ from app.repositories import organization_repository
 from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 
-router = APIRouter(prefix="/organizations", tags=["organizations"])
+router = APIRouter(tags=["organizations"])
 
 @router.post("/", response_model=OrganizationOut)
 def create_org(org: OrganizationCreate, db: Session = Depends(get_db)):

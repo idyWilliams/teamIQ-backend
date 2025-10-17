@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(tags=["users"])
 
 @router.get("/{user_id}")
 def read_user(user_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user_or_organization)):

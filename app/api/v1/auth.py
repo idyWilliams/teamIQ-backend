@@ -13,21 +13,21 @@ from app.repositories.invitation_repository import get_invitation_by_code, accep
 from typing import Optional
 import datetime
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 @router.post("/register/user")
 def register_user(user: UserCreate, db: Session = Depends(get_db), invitation_code: Optional[str] = Query(None)):
     db_user = user_repository.get_user_by_email(db, user.email)
     if db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-    
+
     organization_id = None
     if invitation_code:
         invitation = get_invitation_by_code(db, invitation_code)
         if invitation:
             organization_id = invitation.organization_id
             accept_invitation(db, invitation_code, None)
-    
+
     new_user = user_repository.create_user(db, user, organization_id=organization_id)
     access_token = create_access_token(data={"sub": new_user.email})
     return create_response(
@@ -40,19 +40,15 @@ def register_user(user: UserCreate, db: Session = Depends(get_db), invitation_co
 def register_org(org: OrganizationCreate, db: Session = Depends(get_db)):
     if organization_repository.get_organization_by_name(db, org.organization_name):
         raise HTTPException(status_code=400, detail="Organization name already registered")
-    
+
     new_org = organization_repository.create_organization(db, org)
     db.commit()
     db.refresh(new_org)
-    
+
     access_token = create_access_token(data={"sub": new_org.email})
-    
-    try:
-        org_out = OrganizationOut.model_validate(new_org)
-    except Exception as e:
-        print(f"Validation error: {e}")
-        org_out = OrganizationOut.model_validate({**new_org.__dict__, 'social_media_handles': {}, 'favorite_tools': {}})
-    
+
+    org_out = OrganizationOut.model_validate(new_org)
+
     return create_response(
         success=True,
         message="Organization registered successfully",
@@ -63,22 +59,22 @@ def register_org(org: OrganizationCreate, db: Session = Depends(get_db)):
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     # Lowercase email for lookup
     login_email = login_data.email.lower()
-    
+
     # Lookup user first, then org
     user_obj = user_repository.get_user_by_email(db, login_email)
     if not user_obj:
         user_obj = organization_repository.get_organization_by_email(db, login_email)
-    
+
     if not user_obj or not verify_password(login_data.password, user_obj.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
-    
+
     # Adjust expiry for "remember me"
     expires_delta = datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     if login_data.remember_me:
         expires_delta = datetime.timedelta(days=7)
-    
+
     access_token = create_access_token(data={"sub": user_obj.email}, expires_delta=expires_delta)
-    
+
     # Distinguish user vs org
     if hasattr(user_obj, 'organization_name'):  # Org
         return create_response(
@@ -93,31 +89,71 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
             data=Token(access_token=access_token, token_type="bearer", user=UserOut.model_validate(user_obj))
         )
 
+# @router.post("/password-reset")
+# async def request_reset(request: PasswordResetRequest, db: Session = Depends(get_db)):
+#     # Lowercase email for lookup
+#     request.email = request.email.lower()
+
+#     user_obj = user_repository.get_user_by_email(db, request.email) or organization_repository.get_organization_by_email(db, request.email)
+#     if not user_obj:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     token = create_reset_token(request.email)
+#     reset_link = f"https://yourapp.com/reset?token={token}"
+#     await send_email(request.email, reset_link)
+#     return create_response(success=True, message="Reset email sent")
+
+# @router.post("/password-reset/confirm")
+# def confirm_reset(confirm: PasswordResetConfirm, db: Session = Depends(get_db)):
+#     email = verify_reset_token(confirm.token)
+#     user_obj = user_repository.get_user_by_email(db, email) or organization_repository.get_organization_by_email(db, email)
+#     if not user_obj:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     hashed_pw = get_password_hash(confirm.new_password)
+#     user_obj.hashed_password = hashed_pw
+#     db.commit()
+#     return create_response(success=True, message="Password reset successful")
+
+# @router.post("/accept-invitation")
+# def accept_invite(invitation_code: str, user_id: int, db: Session = Depends(get_db)):
+#     accept_invitation(db, invitation_code, user_id)
+#     return create_response(success=True, message="Invitation accepted")
+
+
 @router.post("/password-reset")
-async def request_reset(request: PasswordResetRequest, db: Session = Depends(get_db)):
+def request_reset(request: PasswordResetRequest, db: Session = Depends(get_db)):
+    """Request password reset - sends email with reset token"""
     # Lowercase email for lookup
     request.email = request.email.lower()
-    
-    user_obj = user_repository.get_user_by_email(db, request.email) or organization_repository.get_organization_by_email(db, request.email)
+
+    user_obj = user_repository.get_user_by_email(db, request.email) or \
+               organization_repository.get_organization_by_email(db, request.email)
+
     if not user_obj:
-        raise HTTPException(status_code=404, detail="User not found")
+        # Don't reveal if email exists (security best practice)
+        return create_response(success=True, message="If the email exists, a reset link has been sent")
+
     token = create_reset_token(request.email)
-    reset_link = f"https://yourapp.com/reset?token={token}"
-    await send_email(request.email, reset_link)
+    reset_link = f"https://team-iq-frontend.vercel.app/reset?token={token}"
+
+    # Send email synchronously
+    send_email(request.email, reset_link)
+
     return create_response(success=True, message="Reset email sent")
 
 @router.post("/password-reset/confirm")
 def confirm_reset(confirm: PasswordResetConfirm, db: Session = Depends(get_db)):
+    """Confirm password reset with token and new password"""
     email = verify_reset_token(confirm.token)
-    user_obj = user_repository.get_user_by_email(db, email) or organization_repository.get_organization_by_email(db, email)
+
+    user_obj = user_repository.get_user_by_email(db, email) or \
+               organization_repository.get_organization_by_email(db, email)
+
     if not user_obj:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Hash the new password (argon2 will be used now)
     hashed_pw = get_password_hash(confirm.new_password)
     user_obj.hashed_password = hashed_pw
     db.commit()
-    return create_response(success=True, message="Password reset successful")
 
-@router.post("/accept-invitation")
-def accept_invite(invitation_code: str, user_id: int, db: Session = Depends(get_db)):
-    accept_invitation(db, invitation_code, user_id)
-    return create_response(success=True, message="Invitation accepted")
+    return create_response(success=True, message="Password reset successful")

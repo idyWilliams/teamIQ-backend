@@ -8,7 +8,7 @@ from app.core.security import get_current_user_or_organization
 from app.schemas.response_model import create_response
 from app.models.organization import Organization
 
-router = APIRouter(prefix="/invitations", tags=["invitations"])
+router = APIRouter(tags=["invitations"])
 
 @router.post("/", response_model=InvitationOut)
 async def create_invitation(invitation: InvitationCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user_or_organization)):

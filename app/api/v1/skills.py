@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.skill import UserSkillUpdate, SkillRecommendation, UserSkillOut
@@ -7,7 +8,7 @@ from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 from typing import List
 
-router = APIRouter(prefix="/skills", tags=["skills"])
+router = APIRouter(tags=["skills"])
 
 @router.get("/my-skills", response_model=List[UserSkillOut])
 def get_my_skills(db: Session = Depends(get_db), current_user=Depends(get_current_user_or_organization)):

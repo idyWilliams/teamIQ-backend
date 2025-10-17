@@ -19,15 +19,7 @@ pwd_context = CryptContext(
 )
 
 def get_password_hash(password: str) -> str:
-    try:
-        return pwd_context.hash(password)
-    except Exception as e:
-        print(f"Hashing error: {e}")
-        raise
+    return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except Exception as e:
-        print(f"Verification error: {e}")
-        raise
+    return pwd_context.verify(plain_password, hashed_password)

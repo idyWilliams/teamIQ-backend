@@ -10,14 +10,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_organization_by_name(db: Session, name: str):
-    try:
-        logger.info(f"Using UserRole enum: {[(e.name, e.value) for e in UserRole]}")
-        result = db.query(Organization).filter(Organization.organization_name == name).first()
-        logger.info(f"Queried organization: {name}, role: {result.role if result else None}")
-        return result
-    except DataError as e:
-        logger.error(f"Enum value error for organization {name}: {e}")
-        raise HTTPException(status_code=500, detail="Invalid role value in database")
+    logger.info(f"Using UserRole enum: {[(e.name, e.value) for e in UserRole]}")
+    result = db.query(Organization).filter(Organization.organization_name == name).first()
+    logger.info(f"Queried organization: {name}, role: {result.role if result else None}")
+    return result
 
 def get_organization_by_email(db: Session, email: str):
     return db.query(Organization).filter(Organization.email == email.lower()).first()  # Fixed: Lowercase for case-insensitivity
@@ -45,15 +41,7 @@ def create_organization(db: Session, organization: OrganizationCreate):
         address=organization.address,
         phone_number=organization.phone_number
     )
-    try:
-        db.add(new_org)
-        db.commit()
-        db.refresh(new_org)
-        return new_org
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Organization could not be created")
-    except DataError as e:
-        db.rollback()
-        logger.error(f"DataError in create_organization: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid data: {str(e)}")
+    db.add(new_org)
+    db.commit()
+    db.refresh(new_org)
+    return new_org

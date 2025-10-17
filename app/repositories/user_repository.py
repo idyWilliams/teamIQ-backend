@@ -12,13 +12,7 @@ def create_user(db: Session, user: UserCreate, organization_id: int = None):
     db_user = get_user_by_email(db, user.email)
     if db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-    try:
-        hashed_pw = get_password_hash(user.password)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password too long (must be ≤ 72 characters)."
-        )
+    hashed_pw = get_password_hash(user.password)
 
     new_user = User(
         email=user.email.lower(),  # Fixed: Store lowercase
@@ -31,11 +25,7 @@ def create_user(db: Session, user: UserCreate, organization_id: int = None):
         organization_id=organization_id,
     )
 
-    try:
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        return new_user
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="User could not be created")
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user

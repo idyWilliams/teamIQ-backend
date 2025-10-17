@@ -45,14 +45,37 @@ app.include_router(invitations.router, prefix="/api/v1/invitations", tags=["invi
 app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    # Log the exception for debugging
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+
+    # Prepare a user-friendly error message
+    user_message = "An unexpected error occurred."
+    troubleshooting_steps = "Please try again later or contact support if the problem persists."
+
+    if isinstance(exc, HTTPException):
+        status_code = exc.status_code
+        if status_code == 404:
+            user_message = "The requested resource was not found."
+            troubleshooting_steps = "Please check the URL and try again."
+        elif status_code == 401:
+            user_message = "You are not authorized to perform this action."
+            troubleshooting_steps = "Please check your credentials and try again."
+        elif status_code == 403:
+            user_message = "You do not have permission to perform this action."
+            troubleshooting_steps = "Please contact your administrator if you believe this is an error."
+        else:
+            user_message = exc.detail
+    else:
+        status_code = 500
+
     return JSONResponse(
-        status_code=exc.status_code,
+        status_code=status_code,
         content=create_response(
             success=False,
-            message=exc.detail,
-            errors={"status_code": exc.status_code},
+            message=user_message,
+            errors={"details": str(exc), "troubleshooting": troubleshooting_steps},
         ).model_dump(),
     )
 

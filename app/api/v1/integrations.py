@@ -7,7 +7,7 @@ from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 from typing import List
 
-router = APIRouter(prefix="/integrations", tags=["integrations"])
+router = APIRouter(tags=["integrations"])
 
 @router.post("/link")
 def link_account(link: LinkAccount, db: Session = Depends(get_db), current_user=Depends(get_current_user_or_organization)):

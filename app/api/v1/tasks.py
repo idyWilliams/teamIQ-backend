@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
 from app.schemas.task import Task, TaskCreate, TaskUpdate
+from app.schemas.notification import NotificationCreate
 from app.repositories import task_repository
 from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 from app.models.task import TaskStatus
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+router = APIRouter(tags=["tasks"])
 
 @router.post("/")
 def create_task_for_user(task: TaskCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user_or_organization)):
