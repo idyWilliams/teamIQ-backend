@@ -14,13 +14,19 @@ def read_user(user_id: int, db: Session = Depends(get_db), current_user = Depend
     """
     Get a specific user's profile by ID.
     """
-    # Check if current_user is User and has access (self or org mentor)
-    if isinstance(current_user, User) and current_user.id != user_id and current_user.role != "mentor":
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
     db_user = db.query(User).filter(User.id == user_id).first()
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Authorization check
+    if isinstance(current_user, Organization):
+        if db_user.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif isinstance(current_user, User):
+        if current_user.id != user_id and current_user.role != "mentor":
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+    else:
+        raise HTTPException(status_code=403, detail="Access denied")
     user_out = UserOut.from_orm(db_user)
     return create_response(success=True, message="User retrieved successfully", data=user_out.model_dump())
 
