@@ -29,6 +29,7 @@ class OrganizationCreate(BaseModel):
 
     @field_validator("team_size")
     def valid_team_size(cls, v):
+        # mk this as range-limited
         allowed_sizes = [2, 3, 5, 8, 10, 15, 20, 50, 100]
         if v not in allowed_sizes:
             raise ValueError(f"Team size must be one of {allowed_sizes}")

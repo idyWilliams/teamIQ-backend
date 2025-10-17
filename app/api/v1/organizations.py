@@ -5,6 +5,7 @@ from app.schemas.organization import OrganizationCreate, OrganizationOut
 from app.repositories import organization_repository
 from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
+from app.models.organization import Organization
 
 router = APIRouter(tags=["organizations"])
 
@@ -17,5 +18,7 @@ def create_org(org: OrganizationCreate, db: Session = Depends(get_db)):
 def get_org(org_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user_or_organization)):
     if not isinstance(current_user, Organization) or current_user.id != org_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    db_org = organization_repository.get_organization_by_email(db, current_user.email)  # Or by id
+    db_org = organization_repository.get_organization_by_id(db, org_id)
+    if not db_org:
+        raise HTTPException(status_code=404, detail="Organization not found")
     return create_response(success=True, data=OrganizationOut.from_orm(db_org))

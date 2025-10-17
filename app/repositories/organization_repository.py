@@ -18,6 +18,9 @@ def get_organization_by_name(db: Session, name: str):
 def get_organization_by_email(db: Session, email: str):
     return db.query(Organization).filter(Organization.email == email.lower()).first()  # Fixed: Lowercase for case-insensitivity
 
+def get_organization_by_id(db: Session, org_id: int):
+    return db.query(Organization).filter(Organization.id == org_id).first()
+
 def create_organization(db: Session, organization: OrganizationCreate):
     if get_organization_by_name(db, organization.organization_name):
         raise HTTPException(
