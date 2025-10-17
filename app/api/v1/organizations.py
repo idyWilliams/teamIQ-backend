@@ -19,6 +19,4 @@ def get_org(org_id: int, db: Session = Depends(get_db), current_user = Depends(g
     if not isinstance(current_user, Organization) or current_user.id != org_id:
         raise HTTPException(status_code=403, detail="Access denied")
     db_org = organization_repository.get_organization_by_id(db, org_id)
-    if not db_org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-    return create_response(success=True, data=OrganizationOut.from_orm(db_org))
+    return create_response(success=True, message="Organization retrieved successfully", data=OrganizationOut.from_orm(db_org))
