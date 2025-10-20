@@ -20,3 +20,5 @@ class User(Base):
     )
     tasks = relationship("Task", back_populates="owner")
     projects = relationship("Project", back_populates="owner")
+    notifications = relationship("Notification", back_populates="user")
+    notification_preferences = relationship("NotificationPreference", back_populates="user", uselist=False)

@@ -11,6 +11,7 @@ from app.api.v1 import projects as projects_router
 from app.api.v1 import tasks as tasks_router
 from app.api.v1 import dashboard as dashboard_router
 from app.api.v1 import integrations as integrations_router
+from app.api.v1 import notification as notification_router
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -25,6 +26,7 @@ app.include_router(projects_router.router, prefix="/api/v1")
 app.include_router(tasks_router.router, prefix="/api/v1")
 app.include_router(dashboard_router.router, prefix="/api/v1")
 app.include_router(integrations_router.router, prefix="/api/v1")
+app.include_router(notification_router.router, prefix ="/api/v1")
 
 @app.get("/")
 def root():
