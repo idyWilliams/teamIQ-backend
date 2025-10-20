@@ -1,13 +1,20 @@
 from pydantic import BaseModel
+import datetime
+from typing import Optional
 
-class ProjectBase(BaseModel):
+class ProjectCreate(BaseModel):
     name: str
-
-class ProjectCreate(ProjectBase):
     owner_id: int
+    organization_id: Optional[int] = None
 
-class ProjectResponse(ProjectBase):
+class ProjectResponse(BaseModel):
     id: int
+    name: str
     owner_id: int
+    organization_id: Optional[int]
+    status: str  # From enum
+    pct_complete: float
+    createdAt: datetime.datetime
+
     class Config:
-        orm_mode = True
+        from_attributes = True

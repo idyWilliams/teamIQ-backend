@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+<<<<<<< HEAD
 from datetime import datetime
 from typing import Optional
 from app.models.notification import NotificationType
@@ -34,6 +35,23 @@ class NotificationPreferenceCreate(NotificationPreferenceBase):
 class NotificationPreferenceOut(NotificationPreferenceBase):
     id: int
     user_id: int
+=======
+from typing import Optional
+import datetime  # Added for createdAt field
+
+class NotificationCreate(BaseModel):
+    title: str
+    message: str
+    type: Optional[str] = "info"
+
+class NotificationOut(BaseModel):
+    id: int
+    title: str
+    message: str
+    is_read: bool
+    type: str
+    createdAt: datetime.datetime  # Now resolves with import
+>>>>>>> origin/staging
 
     class Config:
         from_attributes = True

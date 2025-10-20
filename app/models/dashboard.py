@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, String
+from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -20,6 +20,7 @@ class DashboardMetrics(Base):
     skills_summary = Column(JSON, default={})
     contributions_timeseries = Column(JSON, default=[])
 
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
     last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 class OrgDashboardMetrics(Base):
@@ -40,4 +41,5 @@ class OrgDashboardMetrics(Base):
     team_member_summary = Column(JSON, default=[])
     active_blockers = Column(JSON, default=[])
 
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
     last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
