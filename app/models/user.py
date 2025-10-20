@@ -1,8 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean
-from sqlalchemy.types import Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Enum, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.models.organization import UserRole
+from sqlalchemy.sql import func
 
 class User(Base):
     __tablename__ = "users"
@@ -14,11 +14,14 @@ class User(Base):
     country = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(
-        SQLEnum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]),
+        Enum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]),
         default=UserRole.INTERN,
         nullable=False
     )
+    organization_id = Column(Integer, ForeignKey("organizations.id"))
+    organization = relationship("Organization", back_populates="users")
     tasks = relationship("Task", back_populates="owner")
     projects = relationship("Project", back_populates="owner")
-    notifications = relationship("Notification", back_populates="user")
-    notification_preferences = relationship("NotificationPreference", back_populates="user", uselist=False)
+    user_skills = relationship("UserSkill", back_populates="user")
+    createdAt = Column(DateTime(timezone=True), server_default=func.now())
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Added server_default

@@ -9,8 +9,11 @@ sqlalchemy = "*"
 psycopg2-binary = "*"
 python-dotenv = "*"
 python-jose = {extras = ["cryptography"], version = "*"}
-passlib = "*"
 authlib = "*"
+uvicorn = "*"
+bcrypt = "*"
+passlib = "*"
+argon2-cffi = "*"
 
 [dev-packages]
 
