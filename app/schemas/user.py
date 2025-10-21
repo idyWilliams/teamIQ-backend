@@ -96,6 +96,7 @@ class UserOut(BaseModel):
     role: UserRole
     createdAt: datetime.datetime
     organization_id: Optional[int] = None
+    organization: Optional["OrganizationOut"] = None
 
     class Config:
         from_attributes = True

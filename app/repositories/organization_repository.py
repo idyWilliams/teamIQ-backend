@@ -20,31 +20,3 @@ def get_organization_by_email(db: Session, email: str):
 
 def get_organization_by_id(db: Session, org_id: int):
     return db.query(Organization).filter(Organization.id == org_id).first()
-
-def create_organization(db: Session, organization: OrganizationCreate):
-    if get_organization_by_name(db, organization.organization_name):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization already registered"
-        )
-    hashed_pw = get_password_hash(organization.password)
-    new_org = Organization(
-        organization_name=organization.organization_name,
-        team_size=organization.team_size,
-        email=organization.email.lower(),  # Fixed: Store lowercase
-        hashed_password=hashed_pw,
-        role=UserRole.ORGANIZATION,
-        organization_image=organization.organization_image,
-        description=organization.description,
-        sector=organization.sector,
-        social_media_handles=organization.social_media_handles,  # Assumes dict; SQLAlchemy handles JSON
-        domain_link=organization.domain_link,
-        favorite_tools=organization.favorite_tools,
-        website=organization.website,
-        address=organization.address,
-        phone_number=organization.phone_number
-    )
-    db.add(new_org)
-    db.commit()
-    db.refresh(new_org)
-    return new_org

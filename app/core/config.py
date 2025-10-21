@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 import os
 from pathlib import Path
@@ -9,6 +9,7 @@ env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(extra='allow')
     DATABASE_URL: str = os.getenv("DATABASE_URL")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-for-jwt")
     GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
@@ -30,7 +31,6 @@ class Settings(BaseSettings):
     MAIL_STARTTLS: bool = os.getenv("MAIL_STARTTLS", "True").lower() == "true"
     MAIL_SSL_TLS: bool = os.getenv("MAIL_SSL_TLS", "False").lower() == "false"
 
-    class Config:
-        env_file = ".env"
+
 
 settings = Settings()

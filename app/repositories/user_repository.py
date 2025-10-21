@@ -8,6 +8,9 @@ from app.core.hashing import get_password_hash
 def get_user_by_email(db: Session, email: str):
     return db.query(User).filter(User.email == email.lower()).first()  # Fixed: Lowercase for case-insensitivity
 
+def get_users_by_organization(db: Session, organization_id: int):
+    return db.query(User).filter(User.organization_id == organization_id).all()
+
 def create_user(db: Session, user: UserCreate, organization_id: int = None):
     db_user = get_user_by_email(db, user.email)
     if db_user:
