@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo, root_validator
+from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo, root_validator, model_validator
 from app.models.organization import UserRole
 import datetime
 from typing import Optional, Dict
@@ -24,15 +24,22 @@ class OrganizationCreate(BaseModel):
     team_size: str
     email: EmailStr
     password: str
+    repeatpassword: str
+    organization_image: Optional[str] = None
+    description: Optional[str] = None
+    sector: Optional[str] = None
+    social_media_handles: Optional[Dict[str, str]] = None
+    domain_link: Optional[str] = None
+    favorite_tools: Optional[Dict[str, str]] = None
+    website: Optional[str] = None
     country: Optional[str] = None
     phone_number: Optional[str] = None
 
-    @field_validator("repeatpassword")
-    def passwords_match(cls, v: str, info: ValidationInfo):
-        password = info.data.get("password")
-        if password and v != password:
+    @model_validator(mode='after')
+    def passwords_match(self):
+        if self.password and self.repeatpassword and self.password != self.repeatpassword:
             raise ValueError("Passwords do not match")
-        return v
+        return self
 
     @field_validator("team_size")
     def valid_team_size(cls, v):
