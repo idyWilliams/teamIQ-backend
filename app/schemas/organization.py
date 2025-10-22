@@ -19,12 +19,12 @@ class OrganizationCreate(BaseModel):
     country: Optional[str] = None
     phone_number: Optional[str] = None
 
-    @field_validator("repeatpassword")
-    def passwords_match(cls, v: str, info: ValidationInfo):
-        password = info.data.get("password")
-        if password and v != password:
-            raise ValueError("Passwords do not match")
-        return v
+    # @field_validator("repeatpassword")
+    # def passwords_match(cls, v: str, info: ValidationInfo):
+    #     password = info.data.get("password")
+    #     if password and v != password:
+    #         raise ValueError("Passwords do not match")
+    #     return v
 
     @field_validator("team_size")
     def valid_team_size(cls, v):
