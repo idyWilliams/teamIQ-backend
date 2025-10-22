@@ -29,3 +29,14 @@ from app.api.v1 import (
 )
 
 app = FastAPI(title="Teamiq Backend")
+
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
+app.include_router(organizations.router, prefix="/api/v1/organizations", tags=["organizations"])
+app.include_router(projects.router, prefix="/api/v1/projects", tags=["projects"])
+app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
+app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["integrations"])
+app.include_router(invitations.router, prefix="/api/v1/invitations", tags=["invitations"])
+app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
+app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
