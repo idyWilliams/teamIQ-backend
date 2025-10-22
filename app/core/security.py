@@ -5,10 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.repositories import user_repository, organization_repository
-from app.models.user import User
-from app.models.organization import Organization
 from app.core.config import settings
-from app.core.hashing import get_password_hash, verify_password
 
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES

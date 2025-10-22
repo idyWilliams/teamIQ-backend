@@ -7,8 +7,6 @@ from app.core.hashing import verify_password, get_password_hash
 from app.core.security import create_access_token, verify_reset_token, create_reset_token, ACCESS_TOKEN_EXPIRE_MINUTES  # For expiry adjust
 from app.core.email_utils import send_email
 from app.schemas.response_model import create_response
-from app.models.user import User
-from app.models.organization import Organization
 from app.repositories.invitation_repository import get_invitation_by_code, accept_invitation
 from typing import Optional
 import datetime

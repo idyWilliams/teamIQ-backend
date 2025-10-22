@@ -1,6 +1,4 @@
 # test_supabase_correct.py
-import os
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 # From your screenshot: project reference is "jdntkpywtpabkytmouei"

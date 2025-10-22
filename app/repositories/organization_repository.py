@@ -1,10 +1,6 @@
 import logging
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError, DataError
-from fastapi import HTTPException, status
 from app.models.organization import Organization, UserRole
-from app.schemas.organization import OrganizationCreate  # Fixed import
-from app.core.hashing import get_password_hash
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo, root_validator, model_validator
+from pydantic import BaseModel, EmailStr, field_validator, root_validator, model_validator
 from app.models.organization import UserRole
 import datetime
 from typing import Optional, Dict

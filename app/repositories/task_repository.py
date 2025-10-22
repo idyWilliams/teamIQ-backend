@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from app.models.task import Task, TaskStatus
-from app.schemas.task import TaskCreate, TaskUpdate
+from app.schemas.task import TaskCreate
 from fastapi import HTTPException
 from sqlalchemy import func
 

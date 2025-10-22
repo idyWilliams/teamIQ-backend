@@ -1,6 +1,5 @@
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from app.core.config import settings
-from typing import Optional
 
 async def _get_mail_config() -> ConnectionConfig:
     """Lazy-load config to avoid startup crashes if .env partial."""

@@ -3,7 +3,6 @@ from typing import Optional
 from app.models.organization import UserRole
 import datetime
 import re  # For password regex validation
-import json  # For JSON parsing in validator
 
 # --------------------
 # Request Schemas

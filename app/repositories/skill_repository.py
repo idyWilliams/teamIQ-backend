@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 from app.models.skill import Skill, UserSkill
-from app.schemas.skill import SkillCreate, UserSkillUpdate
 
 def get_or_create_skill(db: Session, name: str) -> Skill:
     skill = db.query(Skill).filter(Skill.name == name).first()

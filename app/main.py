@@ -1,9 +1,11 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from pathlib import Path
 from app.core.database import Base, engine
-from app.schemas.response_model import create_response
-from fastapi import HTTPException
+
+from app.api.v1 import (
+    auth, users, organizations, projects, tasks, dashboard,
+    integrations, invitations, skills, notifications
+)
 
 # Logger setup
 import logging
@@ -23,12 +25,15 @@ logger.addHandler(logHandler)
 
 # Import all models to ensure tables are created
 
-from app.api.v1 import (
-    auth, users, organizations, projects, tasks, dashboard,
-    integrations, invitations, skills, notifications
-)
-
 app = FastAPI(title="Teamiq Backend")
+
+@app.on_event("startup")
+def on_startup():
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully.")
+    except Exception as e:
+        logger.error(f"Error creating tables on startup: {e}")
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
