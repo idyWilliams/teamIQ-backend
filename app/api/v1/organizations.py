@@ -16,12 +16,15 @@ def signup(org: OrganizationSignUp, db: Session = Depends(get_db)):
     if db_org:
         raise HTTPException(status_code=400, detail="Email already registered")
     hashed_password = get_password_hash(org.password)
+    team_size_str = org.team_size.split('-')[0].replace('+', '')
+    team_size_int = int(team_size_str)
     new_org = Organization(
         organization_name=org.organization_name,
-        team_size=org.team_size,
+        team_size=team_size_int,
         email=org.email,
         country=org.country,
-        hashed_password=hashed_password
+        hashed_password=hashed_password,
+        role="organization"
     )
     db.add(new_org)
     db.commit()

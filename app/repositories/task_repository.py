@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 from app.models.task import Task, TaskStatus
 from app.schemas.task import TaskCreate, TaskUpdate
+from fastapi import HTTPException
+from sqlalchemy import func
 
 def get_tasks(db: Session, skip: int = 0, limit: int = 100, status: TaskStatus = None, user_id: int = None, org_id: int = None):
     query = db.query(Task).offset(skip).limit(limit)

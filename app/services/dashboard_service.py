@@ -8,6 +8,7 @@ from app.models.task import Task, TaskStatus
 from app.models.project import Project, ProjectStatus
 from app.models.user import User
 from app.models.skill import UserSkill, Skill
+from app.models.organization import UserRole
 
 def compute_task_stats(db: Session, user_id: int):
     total = db.query(func.count(Task.id)).filter(Task.owner_id == user_id).scalar() or 0

@@ -28,7 +28,7 @@ class Organization(Base):
     domain_link = Column(String, nullable=True)
     favorite_tools = Column(JSON, nullable=True)
     website = Column(String, nullable=True)
-    address = Column(String, nullable=True)
+    country = Column(String, nullable=True)
     phone_number = Column(String, nullable=True)
     users = relationship("User", back_populates="organization")
     createdAt = Column(DateTime(timezone=True), server_default=func.now())

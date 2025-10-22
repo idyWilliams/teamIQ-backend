@@ -16,15 +16,7 @@ class OrganizationCreate(BaseModel):
     team_size: str
     email: EmailStr
     password: str
-    repeatpassword: str
-    organization_image: Optional[str] = None
-    description: Optional[str] = None
-    sector: Optional[str] = None
-    social_media_handles: Optional[Dict[str, str]] = None
-    domain_link: Optional[str] = None
-    favorite_tools: Optional[Dict[str, str]] = None
-    website: Optional[str] = None
-    address: Optional[str] = None
+    country: Optional[str] = None
     phone_number: Optional[str] = None
 
     @field_validator("repeatpassword")
@@ -52,7 +44,7 @@ class OrganizationUpdate(BaseModel):
     domain_link: Optional[str] = None
     favorite_tools: Optional[Dict[str, str]] = None
     website: Optional[str] = None
-    address: Optional[str] = None
+    country: Optional[str] = None
     phone_number: Optional[str] = None
 
 
@@ -69,7 +61,7 @@ class OrganizationOut(BaseModel):
     domain_link: Optional[str] = None
     favorite_tools: Optional[Dict[str, str]] = None
     website: Optional[str] = None
-    address: Optional[str] = None
+    country: Optional[str] = None
     phone_number: Optional[str] = None
     createdAt: datetime.datetime
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.dashboard import DashboardResponse, OrgDashboardResponse
+from app.schemas.dashboard import DashboardResponse, OrgDashboardResponse, OrgDashboardMetrics
 from app.services.dashboard_service import compute_and_upsert_dashboard_metrics, get_cached_org_dashboard, compute_org_metrics
 from app.core.security import get_current_user_or_organization
 from app.schemas.response_model import create_response
