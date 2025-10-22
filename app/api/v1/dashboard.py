@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.dashboard import DashboardResponse, OrgDashboardResponse, OrgDashboardMetrics
+from app.schemas.dashboard import DashboardResponse, OrgDashboardResponse
+from app.models.dashboard import OrgDashboardMetrics
 from app.services.dashboard_service import compute_and_upsert_dashboard_metrics, get_cached_org_dashboard, compute_org_metrics
 from app.core.security import get_current_user_or_organization
 from app.schemas.response_model import create_response
@@ -27,7 +28,7 @@ def get_org_dashboard(db: Session = Depends(get_db), current_user=Depends(get_cu
         raise HTTPException(status_code=403, detail="Access denied for users")
     metrics = compute_org_metrics(db, current_user.id) or get_cached_org_dashboard(db, current_user.id)
     if not metrics:
-        metrics = OrgDashboardMetrics(org_id=current_user.id)
+        metrics = OrgDashboardResponse(org_id=current_user.id)
         db.add(metrics)
         db.commit()
     return create_response(
