@@ -11,6 +11,14 @@ class OrganizationSignUp(BaseModel):
     country: str
     password: str
 
+    @field_validator("team_size")
+    def valid_team_size(cls, v):
+        # mk this as range-limited
+        allowed_sizes = ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"]
+        if v not in allowed_sizes:
+            raise ValueError(f"Team size must be one of {allowed_sizes}")
+        return v
+
 class OrganizationCreate(BaseModel):
     organization_name: str
     team_size: str
@@ -19,12 +27,12 @@ class OrganizationCreate(BaseModel):
     country: Optional[str] = None
     phone_number: Optional[str] = None
 
-    # @field_validator("repeatpassword")
-    # def passwords_match(cls, v: str, info: ValidationInfo):
-    #     password = info.data.get("password")
-    #     if password and v != password:
-    #         raise ValueError("Passwords do not match")
-    #     return v
+    @field_validator("repeatpassword")
+    def passwords_match(cls, v: str, info: ValidationInfo):
+        password = info.data.get("password")
+        if password and v != password:
+            raise ValueError("Passwords do not match")
+        return v
 
     @field_validator("team_size")
     def valid_team_size(cls, v):

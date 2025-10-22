@@ -20,5 +20,5 @@ def create_response(success: bool, message: str, data: Optional[Any] = None, err
         message=message,
         data=data,
         errors=errors,
-        timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat()  # ISO string for serialization
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
