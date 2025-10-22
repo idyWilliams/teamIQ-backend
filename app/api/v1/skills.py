@@ -22,7 +22,7 @@ def update_skill_level(skill_name: str, update: UserSkillUpdate, db: Session = D
     if not hasattr(current_user, 'organization_id'):
         raise HTTPException(status_code=403, detail="Users only")
     skill = skill_repository.get_or_create_skill(db, skill_name)
-    us = skill_repository.update_user_skill_level(db, current_user.id, skill.id, update.level)
+    skill_repository.update_user_skill_level(db, current_user.id, skill.id, update.level)
     return create_response(success=True, message="Skill updated")
 
 @router.get("/recommendations", response_model=List[SkillRecommendation])
