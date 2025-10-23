@@ -7,29 +7,44 @@ from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 from app.models.organization import Organization
 from app.core.hashing import get_password_hash
+from app.models.organization import UserRole
 
 router = APIRouter(tags=["organizations"])
 
-@router.post("/signup", response_model=OrganizationOut, status_code=201)
+
+
+@router.post("/signup", status_code=201)  # Removed response_model
 def signup(org: OrganizationSignUp, db: Session = Depends(get_db)):
     db_org = organization_repository.get_organization_by_email(db, email=org.email)
     if db_org:
         raise HTTPException(status_code=400, detail="Email already registered")
+
     hashed_password = get_password_hash(org.password)
+
+    # Handle team_size conversion properly
     team_size_str = org.team_size.split('-')[0].replace('+', '')
-    team_size_int = int(team_size_str)
+    team_size_int = int(team_size_str) if team_size_str.isdigit() else 1
+
     new_org = Organization(
         organization_name=org.organization_name,
         team_size=team_size_int,
         email=org.email,
         country=org.country,
         hashed_password=hashed_password,
-        role="organization"
+        role=UserRole.ORGANIZATION
     )
+
     db.add(new_org)
     db.commit()
     db.refresh(new_org)
-    return create_response(success=True, message="Organization created successfully", data=OrganizationOut.from_orm(new_org))
+
+    return create_response(
+        success=True,
+        message="Organization created successfully",
+        data=OrganizationOut.model_validate(new_org)
+    )
+
+
 
 @router.post("/onboardingComplete", response_model=OrganizationOut, status_code=200)
 def onboarding_complete(org: OrganizationCreate, db: Session = Depends(get_db)):
@@ -52,11 +67,11 @@ def update_org(org_id: int, org_update: OrganizationUpdate, db: Session = Depend
     db_org = organization_repository.get_organization_by_id(db, org_id)
     if not db_org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    
+
     update_data = org_update.dict(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_org, key, value)
-        
+
     db.commit()
     db.refresh(db_org)
     return create_response(success=True, message="Organization updated successfully", data=OrganizationOut.from_orm(db_org))
