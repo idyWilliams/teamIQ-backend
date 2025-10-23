@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.organization import OrganizationCreate, OrganizationOut, OrganizationSignUp, OrganizationUpdate
+# from app.schemas.organization import OrganizationCreate, OrganizationOut, OrganizationSignUp, OrganizationUpdate
+from app.schemas.organization import (
+    OrganizationSignUp,
+    OrganizationOut,
+    OrganizationUpdate
+)
 from app.repositories import organization_repository
 from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
@@ -43,7 +48,7 @@ def signup(org: OrganizationSignUp, db: Session = Depends(get_db)):
 
 
 @router.post("/onboardingComplete", response_model=OrganizationOut, status_code=200)
-def onboarding_complete(org: OrganizationCreate, db: Session = Depends(get_db)):
+def onboarding_complete(org: OrganizationSignUp, db: Session = Depends(get_db)):
     db_org = organization_repository.get_organization_by_email(db, email=org.email)
     if not db_org:
         raise HTTPException(status_code=404, detail="Organization not found")
