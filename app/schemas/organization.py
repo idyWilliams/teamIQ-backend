@@ -66,7 +66,7 @@ class OrganizationUpdate(BaseModel):
 class OrganizationOut(BaseModel):
     id: int
     organization_name: str
-    team_size: int
+    team_size: str
     email: EmailStr
     role: UserRole
     organization_image: Optional[str] = None

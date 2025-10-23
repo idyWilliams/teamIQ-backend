@@ -12,8 +12,7 @@ from app.models.organization import UserRole
 router = APIRouter(tags=["organizations"])
 
 
-
-@router.post("/signup", status_code=201)  # Removed response_model
+@router.post("/signup", status_code=201)
 def signup(org: OrganizationSignUp, db: Session = Depends(get_db)):
     db_org = organization_repository.get_organization_by_email(db, email=org.email)
     if db_org:
@@ -21,13 +20,9 @@ def signup(org: OrganizationSignUp, db: Session = Depends(get_db)):
 
     hashed_password = get_password_hash(org.password)
 
-    # Handle team_size conversion properly
-    team_size_str = org.team_size.split('-')[0].replace('+', '')
-    team_size_int = int(team_size_str) if team_size_str.isdigit() else 1
-
     new_org = Organization(
         organization_name=org.organization_name,
-        team_size=team_size_int,
+        team_size=org.team_size, 
         email=org.email,
         country=org.country,
         hashed_password=hashed_password,
@@ -43,6 +38,7 @@ def signup(org: OrganizationSignUp, db: Session = Depends(get_db)):
         message="Organization created successfully",
         data=OrganizationOut.model_validate(new_org)
     )
+
 
 
 

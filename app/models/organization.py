@@ -14,7 +14,7 @@ class Organization(Base):
     __tablename__ = "organizations"
     id = Column(Integer, primary_key=True, index=True)
     organization_name = Column(String, unique=True, nullable=False)
-    team_size = Column(Integer, nullable=False)
+    team_size = Column(String, nullable=False) 
     email = Column(String, unique=True, nullable=True)
     hashed_password = Column(String, nullable=False)
     role = Column(
