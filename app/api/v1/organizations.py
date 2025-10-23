@@ -22,7 +22,7 @@ def signup(org: OrganizationSignUp, db: Session = Depends(get_db)):
 
     new_org = Organization(
         organization_name=org.organization_name,
-        team_size=org.team_size, 
+        team_size=org.team_size,
         email=org.email,
         country=org.country,
         hashed_password=hashed_password,
@@ -54,7 +54,7 @@ def onboarding_complete(org: OrganizationCreate, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(db_org)
-    return create_response(success=True, data=OrganizationOut.from_orm(db_org))
+    return create_response(success=True, message="Organization onboarding completed successfully", data=OrganizationOut.from_orm(db_org))
 
 @router.put("/{org_id}", response_model=OrganizationOut, status_code=200)
 def update_org(org_id: int, org_update: OrganizationUpdate, db: Session = Depends(get_db), current_user = Depends(get_current_user_or_organization)):

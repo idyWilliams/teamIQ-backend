@@ -1,0 +1,14 @@
+{% extends 'emails/base.html' %}
+{% block content %}
+<h2>You’re Invited to Join TeamIQ 🚀</h2>
+<p>
+An organization has invited you to become part of their workspace.
+Click the button below to accept the invitation and get started.
+</p>
+
+<a href="{{ invitation_link }}" class="cta-button">Accept Invitation</a>
+
+<p>
+Note: This invitation is valid for 48 hours only.
+</p>
+{% endblock %}

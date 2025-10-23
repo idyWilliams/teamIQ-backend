@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ subject }}</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f7f8fa;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+
+    .email-wrapper {
+      max-width: 600px;
+      margin: 20px auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+
+    .header {
+      background-color: #0052CC;
+      color: #fff;
+      text-align: center;
+      padding: 25px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .content {
+      padding: 30px;
+      line-height: 1.6;
+    }
+
+    .cta-button {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 25px;
+      background-color: #0052CC;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 25px;
+      background-color: #f2f4f7;
+      font-size: 13px;
+      color: #777;
+    }
+
+    .footer a {
+      color: #0052CC;
+      text-decoration: none;
+    }
+
+    .social-links img {
+      width: 26px;
+      margin: 0 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="header">
+      <h1>TeamIQ</h1>
+      <p>Your workspace powered by iSentry Technologies</p>
+    </div>
+
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+
+    <div class="footer">
+      <p>© {{ current_year }} TeamIQ by iSentry Technologies. All rights reserved.</p>
+      <p class="social-links">
+        <a href="https://www.linkedin.com/company/isentry-technologies/">
+          <img src="https://cdn-icons-png.flaticon.com/512/145/145807.png" alt="LinkedIn">
+        </a>
+        <a href="https://twitter.com/isentrytec">
+          <img src="https://cdn-icons-png.flaticon.com/512/733/733579.png" alt="Twitter">
+        </a>
+        <a href="mailto:support@isentry.tech">
+          <img src="https://cdn-icons-png.flaticon.com/512/732/732200.png" alt="Email">
+        </a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

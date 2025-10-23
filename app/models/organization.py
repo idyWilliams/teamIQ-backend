@@ -14,7 +14,7 @@ class Organization(Base):
     __tablename__ = "organizations"
     id = Column(Integer, primary_key=True, index=True)
     organization_name = Column(String, unique=True, nullable=False)
-    team_size = Column(String, nullable=False) 
+    team_size = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=True)
     hashed_password = Column(String, nullable=False)
     role = Column(
@@ -30,6 +30,9 @@ class Organization(Base):
     website = Column(String, nullable=True)
     country = Column(String, nullable=True)
     phone_number = Column(String, nullable=True)
-    users = relationship("User", back_populates="organization")
+    # users = relationship("User", back_populates="organization")
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
     updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Fixed: Added server_default for INSERT
+    users = relationship("User",
+                         secondary="user_organizations",
+                         back_populates="organizations")

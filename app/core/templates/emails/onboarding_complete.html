@@ -1,0 +1,12 @@
+{% extends 'emails/base.html' %}
+{% block content %}
+<h2>🎉 Onboarding Complete!</h2>
+<p>
+Hi {{ organization_name }}, congratulations on completing your TeamIQ onboarding.
+You’re all set to start building and collaborating with your team.
+</p>
+
+<a href="https://team-iq-frontend.vercel.app/dashboard" class="cta-button">Open Dashboard</a>
+
+<p>Get ready to experience smoother project management with TeamIQ.</p>
+{% endblock %}

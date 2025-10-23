@@ -1,0 +1,12 @@
+{% extends 'emails/base.html' %}
+{% block content %}
+<h2>Welcome to TeamIQ, {{ organization_name }}!</h2>
+<p>
+Your organization account has been successfully created.
+Log in now to manage your team, assign projects, and collaborate effortlessly.
+</p>
+
+<a href="https://team-iq-frontend.vercel.app/dashboard" class="cta-button">Go to Dashboard</a>
+
+<p>We’re thrilled to have you onboard!</p>
+{% endblock %}

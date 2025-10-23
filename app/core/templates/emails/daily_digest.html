@@ -1,0 +1,10 @@
+{% extends 'emails/base.html' %}
+{% block content %}
+<h2>TeamIQ Daily Summary</h2>
+<p>Hello {{ name }},</p>
+
+<p>Here’s your daily overview:</p>
+<p>{{ summary }}</p>
+
+<a href="https://team-iq-frontend.vercel.app/dashboard" class="cta-button">Open Dashboard</a>
+{% endblock %}
