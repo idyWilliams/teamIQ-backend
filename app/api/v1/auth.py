@@ -13,7 +13,8 @@ from app.core.security import (
     verify_reset_token,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from app.core.email_utils import send_email
+# from app.core.email_utils import send_email
+from app.core.email_utils import send_password_reset_email
 from app.schemas.response_model import create_response
 from app.repositories.user_org_repository import link_user_to_org
 # Schemas
@@ -35,7 +36,7 @@ def register_user(
     db: Session = Depends(get_db),
     invitation_code: str = Query(..., description="Invitation code is required for user registration")
 ):
-    invitation = invitation_repository.get_invitation_by_code(db, invitation_code)
+    invitation = get_invitation_by_code(db, invitation_code)
     if not invitation or invitation.is_used or invitation.expires_at < datetime.datetime.utcnow():
         raise HTTPException(status_code=400, detail="Invalid or expired invitation code")
 
@@ -175,7 +176,7 @@ def request_password_reset(request: PasswordResetRequest, db: Session = Depends(
     token = create_reset_token(email)
     reset_link = f"https://team-iq-frontend.vercel.app/reset?token={token}"
 
-    send_email(email, reset_link)
+    send_password_reset_email(email, reset_link)
 
     return create_response(success=True, message="Reset email sent")
 
