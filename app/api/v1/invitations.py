@@ -48,7 +48,7 @@ async def create_invitation(
     invite_link = f"https://team-iq-frontend.vercel.app/register?invitation_code={db_inv.invitation_code}"
     await send_invitation_email(invitation.email, invite_link)
 
-    logger.info(f"Invitation email sent to {invitation.email} (OrgID={current_user.id}) link: {invite_link}")
+    logger.info(f"📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 Invitation email sent to {invitation.email} (OrgID={current_user.id}) link: {invite_link}📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 ")
 
 
     return create_response(
