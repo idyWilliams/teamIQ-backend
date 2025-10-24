@@ -5,6 +5,7 @@ from app.models.user import User
 from app.models.user_organizations import UserOrganization
 from datetime import datetime, timedelta
 from fastapi import HTTPException
+from app.core.logger import logger
 import uuid
 
 
@@ -23,6 +24,12 @@ def create_invitation(db: Session, invitation: InvitationCreate, organization_id
     db.add(db_invitation)
     db.commit()
     db.refresh(db_invitation)
+
+    logger.info(
+        f"📨 New Invitation Created — Email: {db_invitation.email}, "
+        f"OrgID: {organization_id}, Code: {db_invitation.invitation_code}, "
+        f"ExpiresAt: {db_invitation.expires_at.isoformat()}"
+    )
     return db_invitation
 
 
