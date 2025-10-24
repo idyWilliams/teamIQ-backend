@@ -1,19 +1,16 @@
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from datetime import datetime
 from app.core.config import settings
+from pathlib import Path
 
 
 async def _get_mail_config() -> ConnectionConfig:
-    """
-    Lazy-load mail configuration to avoid crashes during startup
-    when .env is partially configured or in testing.
-    """
-    required = [
-        settings.MAIL_USERNAME, settings.MAIL_PASSWORD,
-        settings.MAIL_FROM, settings.MAIL_SERVER, settings.MAIL_PORT
-    ]
-    if not all(required):
-        raise ValueError("Email configuration incomplete: check MAIL_* values in .env.")
+    """Lazy-load mail config and dynamically locate template folder."""
+    BASE_DIR = Path(__file__).resolve().parent  # app/core/
+    TEMPLATE_FOLDER = str(BASE_DIR / "templates")
+
+    if not Path(TEMPLATE_FOLDER).exists():
+        raise ValueError(f"Template directory not found at {TEMPLATE_FOLDER}")
 
     return ConnectionConfig(
         MAIL_USERNAME=settings.MAIL_USERNAME,
@@ -24,7 +21,7 @@ async def _get_mail_config() -> ConnectionConfig:
         MAIL_STARTTLS=settings.MAIL_STARTTLS,
         MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
         USE_CREDENTIALS=True,
-        TEMPLATE_FOLDER="app/templates"  # Base path for templates
+        TEMPLATE_FOLDER=TEMPLATE_FOLDER
     )
 
 
