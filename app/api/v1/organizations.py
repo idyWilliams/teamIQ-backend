@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 # from app.schemas.organization import OrganizationCreate, OrganizationOut, OrganizationSignUp, OrganizationUpdate
@@ -7,24 +7,43 @@ from app.schemas.organization import (
     OrganizationOut,
     OrganizationUpdate
 )
-from app.repositories import organization_repository
+from app.repositories import organization_repository, user_repository
 from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 from app.models.organization import Organization
 from app.core.hashing import get_password_hash
 from app.models.organization import UserRole
+from app.schemas.response_model import create_response
+from app.core.security import create_access_token
+from app.core.email_utils import send_organization_signup_email
+from app.schemas.auth import Token
 
 router = APIRouter(tags=["organizations"])
 
 
 @router.post("/signup", status_code=201)
-def signup(org: OrganizationSignUp, db: Session = Depends(get_db)):
-    db_org = organization_repository.get_organization_by_email(db, email=org.email)
-    if db_org:
-        raise HTTPException(status_code=400, detail="Email already registered")
+async def signup(
+    org: OrganizationSignUp,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    # ---------------------------
+    # GLOBAL EMAIL VALIDATION
+    # Ensure no user or org has same email
+    # ---------------------------
+    existing_org = organization_repository.get_organization_by_email(db, org.email)
+    existing_user = user_repository.get_user_by_email(db, org.email)
+    if existing_org or existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered in the system")
 
+    # Check for duplicate organization name
+    if organization_repository.get_organization_by_name(db, org.organization_name):
+        raise HTTPException(status_code=400, detail="Organization name already exists")
+
+    # ---------------------------
+    # CREATE ORGANIZATION RECORD
+    # ---------------------------
     hashed_password = get_password_hash(org.password)
-
     new_org = Organization(
         organization_name=org.organization_name,
         team_size=org.team_size,
@@ -38,11 +57,34 @@ def signup(org: OrganizationSignUp, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_org)
 
+    # ---------------------------
+    # ISSUE ORGANIZATION TOKEN
+    # ---------------------------
+    access_token = create_access_token(
+        data={"sub": new_org.email, "scope": "organization"}
+    )
+
+    # ---------------------------
+    # SEND SIGNUP EMAIL ASYNCHRONOUSLY
+    # ---------------------------
+    background_tasks.add_task(send_organization_signup_email, new_org.email, new_org.organization_name)
+
+    # ---------------------------
+    # RETURN TOKEN AND ORG INFO
+    # ---------------------------
+    org_out = OrganizationOut.model_validate(new_org)
+    token_response = Token(
+        access_token=access_token,
+        token_type="bearer",
+        organization=org_out
+    )
+
     return create_response(
         success=True,
-        message="Organization created successfully",
-        data=OrganizationOut.model_validate(new_org)
+        message="Organization signup successful",
+        data=token_response
     )
+
 
 
 
