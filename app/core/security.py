@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials  # Changed this line
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.repositories import user_repository, organization_repository
@@ -11,7 +11,7 @@ ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 SECRET_KEY = settings.SECRET_KEY
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = HTTPBearer() 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
@@ -35,7 +35,11 @@ def verify_reset_token(token: str):
     except JWTError:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-def get_current_user_or_organization(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user_or_organization(
+    credentials: HTTPAuthorizationCredentials = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    token = credentials.credentials
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -48,13 +52,13 @@ def get_current_user_or_organization(token: str = Depends(oauth2_scheme), db: Se
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    
+
     user = user_repository.get_user_by_email(db, email=email)
     if user:
         return user
-    
+
     organization = organization_repository.get_organization_by_email(db, email=email)
     if organization:
         return organization
-    
+
     raise credentials_exception
