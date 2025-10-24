@@ -80,42 +80,42 @@ def register_user(
 # ----------------------------
 # ORGANIZATION REGISTRATION
 # ----------------------------
-@router.post("/register/organization")
-def register_organization(org: OrganizationSignUp, db: Session = Depends(get_db)):
-    if organization_repository.get_organization_by_name(db, org.organization_name):
-        raise HTTPException(status_code=400, detail="Organization name already registered")
+# @router.post("/register/organization")
+# def register_organization(org: OrganizationSignUp, db: Session = Depends(get_db)):
+#     if organization_repository.get_organization_by_name(db, org.organization_name):
+#         raise HTTPException(status_code=400, detail="Organization name already registered")
 
-    if organization_repository.get_organization_by_email(db, org.email):
-        raise HTTPException(status_code=400, detail="Email already registered")
+#     if organization_repository.get_organization_by_email(db, org.email):
+#         raise HTTPException(status_code=400, detail="Email already registered")
 
-    hashed_password = get_password_hash(org.password)
+#     hashed_password = get_password_hash(org.password)
 
-    new_org = organization_repository.create_organization(
-        db=db,
-        org_data={
-            "organization_name": org.organization_name,
-            "team_size": org.team_size,
-            "email": org.email,
-            "country": org.country,
-            "hashed_password": hashed_password,
-            "role": "organization"
-        }
-    )
-    db.commit()
-    db.refresh(new_org)
+#     new_org = organization_repository.create_organization(
+#         db=db,
+#         org_data={
+#             "organization_name": org.organization_name,
+#             "team_size": org.team_size,
+#             "email": org.email,
+#             "country": org.country,
+#             "hashed_password": hashed_password,
+#             "role": "organization"
+#         }
+#     )
+#     db.commit()
+#     db.refresh(new_org)
 
-    access_token = create_access_token(data={"sub": new_org.email})
-    org_out = OrganizationOut.model_validate(new_org)
+#     access_token = create_access_token(data={"sub": new_org.email})
+#     org_out = OrganizationOut.model_validate(new_org)
 
-    return create_response(
-        success=True,
-        message="Organization registered successfully",
-        data=Token(
-            access_token=access_token,
-            token_type="bearer",
-            organization=org_out
-        )
-    )
+#     return create_response(
+#         success=True,
+#         message="Organization registered successfully",
+#         data=Token(
+#             access_token=access_token,
+#             token_type="bearer",
+#             organization=org_out
+#         )
+#     )
 
 
 # ----------------------------
