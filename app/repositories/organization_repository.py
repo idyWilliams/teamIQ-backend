@@ -5,6 +5,20 @@ from app.models.organization import Organization, UserRole
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+from app.models.organization import Organization
+
+def create_organization(db, org_data: dict):
+    """
+    Creates a new organization record in the database.
+    org_data is a dictionary containing organization attributes.
+    """
+    new_org = Organization(**org_data)
+    db.add(new_org)
+    db.commit()
+    db.refresh(new_org)
+    return new_org
+
 def get_organization_by_name(db: Session, name: str):
     logger.info(f"Using UserRole enum: {[(e.name, e.value) for e in UserRole]}")
     result = db.query(Organization).filter(Organization.organization_name == name).first()

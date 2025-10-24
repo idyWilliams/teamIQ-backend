@@ -116,7 +116,7 @@ async def signup(
             "email": org.email,
             "country": org.country,
             "hashed_password": hashed_password,
-            "role": "organization"  # Use same format as auth endpoint
+            "role": UserRole.ORGANIZATION # Use same format as auth endpoint
         }
     )
     db.commit()
