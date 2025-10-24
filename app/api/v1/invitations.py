@@ -45,7 +45,7 @@ async def create_invitation(
     # Create new invitation (48-hour expiry)
     db_inv = invitation_repository.create_invitation(db, invitation, current_user.id)
 
-    invite_link = f"https://team-iq-frontend.vercel.app/register?invitation_code={db_inv.invitation_code}"
+    invite_link = f"https://team-iq-frontend.vercel.app/signup?invitation_code={db_inv.invitation_code}?email={invitation.email}"
     await send_invitation_email(invitation.email, invite_link)
 
     logger.info(f"📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 Invitation email sent to {invitation.email} (OrgID={current_user.id}) link: {invite_link}📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 ")
