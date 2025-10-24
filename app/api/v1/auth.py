@@ -56,10 +56,10 @@ def register_user(
     else:
         user_entity = existing_user
 
-    # Link user to invited organization (can belong to many)
+ 
     link_user_to_org(db, user_entity.id, invitation.organization_id)
 
-    # Mark invitation as used
+
     invitation.is_used = True
     db.commit()
     db.refresh(user_entity)

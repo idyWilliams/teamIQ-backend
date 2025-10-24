@@ -1,12 +1,14 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional
 from app.models.organization import UserRole
 import datetime
+
 
 class InvitationCreate(BaseModel):
     email: EmailStr
     role: UserRole
     stack: Optional[str] = None
+
 
 class InvitationOut(BaseModel):
     id: int
@@ -19,5 +21,5 @@ class InvitationOut(BaseModel):
     organization_id: int
     createdAt: datetime.datetime
 
-    class Config:
-        from_attributes = True
+    # ✅ Pydantic v2 compatible config
+    model_config = ConfigDict(from_attributes=True)
