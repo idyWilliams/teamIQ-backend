@@ -6,7 +6,6 @@ from app.core.database import Base
 from app.models.organization import UserRole
 import datetime
 
-
 class Invitation(Base):
     __tablename__ = "invitations"
 
