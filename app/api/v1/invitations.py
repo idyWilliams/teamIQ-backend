@@ -8,9 +8,10 @@ from app.core.security import get_current_user_or_organization
 from app.schemas.response_model import create_response
 from app.models.organization import Organization
 import datetime
+import logging
 
 router = APIRouter(tags=["invitations"])
-
+logger = logging.getLogger("invitations")
 
 @router.post("/", response_model=InvitationOut, status_code=status.HTTP_201_CREATED)
 async def create_invitation(
@@ -46,6 +47,9 @@ async def create_invitation(
 
     invite_link = f"https://team-iq-frontend.vercel.app/register?invitation_code={db_inv.invitation_code}"
     await send_invitation_email(invitation.email, invite_link)
+
+    logger.info(f"Invitation email sent to {invitation.email} (OrgID={current_user.id}) link: {invite_link}")
+
 
     return create_response(
         success=True,
