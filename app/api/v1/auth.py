@@ -165,20 +165,22 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 # PASSWORD RESET REQUEST
 # ----------------------------
 @router.post("/password-reset")
-def request_password_reset(request: PasswordResetRequest, db: Session = Depends(get_db)):
+async def request_password_reset(request: PasswordResetRequest, db: Session = Depends(get_db)):
     email = request.email.lower()
     user_obj = user_repository.get_user_by_email(db, email) or \
                organization_repository.get_organization_by_email(db, email)
 
+    # Always send same message for privacy
     if not user_obj:
         return create_response(success=True, message="If the email exists, a reset link has been sent")
 
     token = create_reset_token(email)
     reset_link = f"https://team-iq-frontend.vercel.app/reset?token={token}"
 
-    send_password_reset_email(email, reset_link)
+    await send_password_reset_email(email, reset_link)
 
     return create_response(success=True, message="Reset email sent")
+
 
 
 # ----------------------------
