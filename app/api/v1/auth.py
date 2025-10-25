@@ -128,8 +128,10 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 
     # Try user -> then organization
     user_obj = user_repository.get_user_by_email(db, login_email)
+    entity_type = "user"
     if not user_obj:
         user_obj = organization_repository.get_organization_by_email(db, login_email)
+        entity_type = "organization"
 
     if not user_obj or not verify_password(login_data.password, user_obj.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
@@ -141,11 +143,12 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 
     access_token = create_access_token(
         data={"sub": user_obj.email},
-        expires_delta=expires_delta
+        expires_delta=expires_delta,
+        entity_type=entity_type
     )
 
     # Distinguish between organization and user
-    if hasattr(user_obj, "organization_name"):  # Organization
+    if entity_type == "organization":  # Organization
         return create_response(
             success=True,
             message="Organization login successful",

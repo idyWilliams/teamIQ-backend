@@ -5,7 +5,7 @@ from app.schemas.invitation import InvitationCreate, InvitationOut
 from app.repositories import invitation_repository, user_repository, organization_repository
 from app.core.email_utils import send_invitation_email
 from app.core.security import get_current_user_or_organization
-from app.schemas.response_model import create_response
+from app.schemas.response_model import create_response, APIResponse
 from app.models.organization import Organization
 import datetime
 import logging
@@ -13,7 +13,7 @@ import logging
 router = APIRouter(tags=["invitations"])
 logger = logging.getLogger("invitations")
 
-@router.post("/", response_model=InvitationOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=APIResponse, status_code=status.HTTP_201_CREATED)
 async def create_invitation(
     invitation: InvitationCreate,
     db: Session = Depends(get_db),
