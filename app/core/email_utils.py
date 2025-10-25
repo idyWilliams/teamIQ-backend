@@ -12,7 +12,7 @@ async def _get_mail_config() -> ConnectionConfig:
     if not Path(TEMPLATE_FOLDER).exists():
         raise ValueError(f"Template directory not found at {TEMPLATE_FOLDER}")
 
-    return ConnectionConfig(
+    config = ConnectionConfig(
         MAIL_USERNAME=settings.MAIL_USERNAME,
         MAIL_PASSWORD=settings.MAIL_PASSWORD,
         MAIL_FROM=settings.MAIL_FROM,
@@ -23,6 +23,8 @@ async def _get_mail_config() -> ConnectionConfig:
         USE_CREDENTIALS=True,
         TEMPLATE_FOLDER=TEMPLATE_FOLDER
     )
+    print("Mail config:", config)
+    return config
 
 
 # ------------------------------------------------
