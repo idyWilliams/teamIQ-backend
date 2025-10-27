@@ -20,6 +20,7 @@ class InvitationOut(BaseModel):
     accepted: bool
     organization_id: int
     createdAt: datetime.datetime
+    invite_link: Optional[str] = None
 
     # ✅ Pydantic v2 compatible config
     model_config = ConfigDict(from_attributes=True)
