@@ -5,7 +5,6 @@ import logging
 from app.core.database import get_db
 from app.schemas.project import ProjectCreate, ProjectResponse
 from app.repositories import project_repository
-<<<<<<< HEAD
 from app.services.notification_service import trigger_notification
 
 router = APIRouter(prefix="/projects", tags=["projects"])

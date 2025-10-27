@@ -1,8 +1,26 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pathlib import Path
+from app.core.database import Base, engine
+from app.schemas.response_model import create_response, APIResponse
+from fastapi import HTTPException
+
+# Import all models to ensure tables are created
+
+from app.api.v1 import users as users_router
+from app.api.v1 import organizations as organizations_router
+from app.api.v1 import auth as auth_router
+from app.api.v1 import projects as projects_router
+from app.api.v1 import tasks as tasks_router
+from app.api.v1 import dashboard as dashboard_router
+from app.api.v1 import integrations as integrations_router
+from app.api.v1 import invitations as invitations_router
+
+# Logger setup
 import logging
 from pythonjsonlogger import jsonlogger
+
+# Create tables
 from app.core.database import Base, engine
 from app.schemas.response_model import create_response
 
@@ -34,6 +52,7 @@ except Exception as e:
 # ----------------------------------------
 app = FastAPI(title="Teamiq Backend")
 
+# Routers (adjusted for app/api/v1/ path)
 # Import routers
 from app.api.v1 import (
     auth, users, organizations, projects, tasks, dashboard,
@@ -77,9 +96,6 @@ async def generic_exception_handler(request: Request, exc: Exception):
         ).model_dump(),
     )
 
-# ----------------------------------------
-# Root route
-# ----------------------------------------
 @app.get("/")
 def root():
     return {"message": "Welcome to Teamiq Backend"}

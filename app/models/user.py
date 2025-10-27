@@ -22,11 +22,6 @@ class User(Base):
     organization = relationship("Organization", back_populates="users")
     tasks = relationship("Task", back_populates="owner")
     projects = relationship("Project", back_populates="owner")
-<<<<<<< HEAD
-    notifications = relationship("Notification", back_populates="user")
-    notification_preferences = relationship("NotificationPreference", back_populates="user", uselist=False)
-=======
     user_skills = relationship("UserSkill", back_populates="user")
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
     updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Added server_default
->>>>>>> origin/staging
