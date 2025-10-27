@@ -3,6 +3,7 @@ from app.models.notification import Notification
 from app.schemas.notification import NotificationCreate
 
 def create_notification(db: Session, notif: NotificationCreate, user_id: int = None, org_id: int = None):
+    # Use the pydantic model dump to dict and create the Notification row
     db_notif = Notification(**notif.model_dump(), user_id=user_id, organization_id=org_id)
     db.add(db_notif)
     db.commit()
@@ -24,4 +25,5 @@ def mark_read(db: Session, notif_id: int):
     if notif:
         notif.is_read = True
         db.commit()
+        db.refresh(notif)
     return notif

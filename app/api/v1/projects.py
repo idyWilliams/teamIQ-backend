@@ -61,7 +61,8 @@ def complete_project(
         db.rollback()
         logger.error(f"Error completing project: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to complete project")
-=======
+    
+    
 from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 from app.models.project import ProjectStatus
@@ -82,4 +83,4 @@ def list_projects(status: str = ProjectStatus.ACTIVE.value, db: Session = Depend
     projects = project_repository.list_projects(db, user_id=user_id, org_id=org_id, status=ProjectStatus(status))
     projects_out = [ProjectResponse.model_validate(p) for p in projects]
     return create_response(success=True, message="Projects retrieved successfully", data=[p.model_dump() for p in projects_out]).data
->>>>>>> origin/staging
+

@@ -17,3 +17,6 @@ class Notification(Base):
 
     user = relationship("User")
     organization = relationship("Organization")
+
+    def __repr__(self):
+        return f"<Notification id={self.id} title={self.title!r}>"

@@ -1,110 +1,87 @@
 import logging
-from fastapi import BackgroundTasks
+import os
+import asyncio
+from typing import Optional
+
 from sqlalchemy.orm import Session
-from app.repositories.notification_repository import create_notification, get_notification_preference
+from app.repositories.notification_repository import create_notification, get_notifications, mark_read
 from app.schemas.notification import NotificationCreate
-from app.models.user import User
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import requests
-from datetime import datetime
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-from app.models.task import Task
+from app.models.user import User  # optional, used only if you want to look up user details
+from app.core.websocket_manager import manager
 
-
+# keep logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-#load email configs fron .env
+# Environment loading (if you use dotenv in your app; keep it but load early)
 from dotenv import load_dotenv
-SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+load_dotenv()
 
-import os
+# NOTE: email/slack pieces have been intentionally removed from the primary flow.
+# The pattern now is: create DB notification and broadcast to connected WebSocket clients.
 
-load_dotenv() 
-
-# Email configuration 
-SMTP_SERVER = os.getenv("MAIL_SERVER")
-SMTP_PORT = int(os.getenv("MAIL_PORT", 587))
-SMTP_USERNAME = os.getenv("MAIL_USERNAME")
-SMTP_PASSWORD = os.getenv("MAIL_PASSWORD")
-SMTP_FROM = os.getenv("MAIL_FROM")
-
-def send_email(to_email: str, subject: str, body: str):
+async def trigger_notification(db: Session, user_or_org_key: str, title: str, message: str, type: str = "info"):
+    """
+    Create a notification in DB and broadcast it to the connected client identified by user_or_org_key.
+    user_or_org_key should be in the format "user:<id>" or "org:<id>".
+    """
     try:
-        msg = MIMEMultipart()
-        msg["From"] = SMTP_USERNAME
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.sendmail(SMTP_USERNAME, to_email, msg.as_string())
-        logger.info(f"Email sent to {to_email}")
-    except Exception as e:
-        logger.error(f"Error sending email to {to_email}: {str(e)}")
+        # prepare notification create schema
+        # Extract numeric ids so we save to DB properly:
+        user_id = None
+        org_id = None
+        if user_or_org_key.startswith("user:"):
+            try:
+                user_id = int(user_or_org_key.split(":", 1)[1])
+            except Exception:
+                user_id = None
+        elif user_or_org_key.startswith("org:"):
+            try:
+                org_id = int(user_or_org_key.split(":", 1)[1])
+            except Exception:
+                org_id = None
 
-def send_slack_message(message: str):
+        notif_in = NotificationCreate(title=title, message=message, type=type)
+        db_notif = create_notification(db, notif_in, user_id=user_id, org_id=org_id)
+
+        # payload to send over websockets
+        payload = {
+            "type": "notification",
+            "data": {
+                "id": db_notif.id,
+                "title": db_notif.title,
+                "message": db_notif.message,
+                "is_read": db_notif.is_read,
+                "type": db_notif.type,
+                "createdAt": db_notif.createdAt.isoformat() if db_notif.createdAt else None,
+            },
+        }
+
+        # Send to connection if present
+        await manager.send_personal_message(user_or_org_key, payload)
+        logger.info(f"Notification created and sent to {user_or_org_key}: {title}")
+        return db_notif
+    except Exception as e:
+        logger.error(f"Error creating/sending notification: {e}")
+        return None
+
+def trigger_notification_sync(db: Session, user_or_org_key: str, title: str, message: str, type: str = "info"):
+    """
+    Sync wrapper you can call from synchronous code paths; schedules the async notification.
+    """
     try:
-        payload = {"text": message}
-        response = requests.post(SLACK_WEBHOOK_URL, json=payload)
-        response.raise_for_status()
-        logger.info("Slack message sent")
-    except Exception as e:
-        logger.error(f"Error sending Slack message: {str(e)}")
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        # No running event loop (e.g., in certain thread contexts). Create a new one.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-def trigger_notification(db: Session, user_id: int, notification_type: str, message: str, background_tasks: BackgroundTasks):
-    try:
-        notification = NotificationCreate(user_id=user_id, type=notification_type, message=message)
-        db_notification = create_notification(db, notification)
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            logger.error(f"User {user_id} not found")
-            return
+    # We schedule the async coroutine
+    return loop.create_task(trigger_notification(db, user_or_org_key, title, message, type))
 
-        preference = get_notification_preference(db, user_id)
-        if notification_type == "task_assigned" and preference.task_assigned_email:
-            background_tasks.add_task(send_email, user.email, "New Task Assigned", message)
-        if notification_type == "task_updated" and preference.task_updated_email:
-            background_tasks.add_task(send_email, user.email, "Task Updated", message)
-        if notification_type == "project_completed" and preference.project_completed_email:
-            background_tasks.add_task(send_email, user.email, "Project Completed", message)
-        if notification_type == "task_assigned" and preference.task_assigned_slack:
-            background_tasks.add_task(send_slack_message, message)
-        if notification_type == "task_updated" and preference.task_updated_slack:
-            background_tasks.add_task(send_slack_message, message)
-        if notification_type == "project_completed" and preference.project_completed_slack:
-            background_tasks.add_task(send_slack_message, message)
-        logger.info(f"Triggered notification for user {user_id}: {notification_type}")
-        return db_notification
-    except Exception as e:
-        logger.error(f"Error triggering notification for user {user_id}: {str(e)}")
+# Utility functions to fetch or mark notifications via repository if you still need them
+def fetch_notifications_for_user(db: Session, user_id: int, is_read: Optional[bool] = None):
+    return get_notifications(db, user_id=user_id, is_read=is_read)
 
-def send_daily_summary():
-    from app.core.database import SessionLocal
-    db = SessionLocal()
-    try:
-        users = db.query(User).all()
-        for user in users:
-            preference = get_notification_preference(db, user.id)
-            if not preference or not preference.daily_summary_email:
-                continue
-            tasks = db.query(Task).filter(Task.owner_id == user.id, Task.updated_at >= datetime.utcnow().replace(hour=0, minute=0, second=0)).all()
-            summary = f"Daily Summary for {user.username}:\n"
-            for task in tasks:
-                summary += f"- Task {task.title}: {'Completed' if task.is_completed else 'Pending'}\n"
-            if tasks:
-                send_email(user.email, "Daily Task Summary", summary)
-        logger.info("Daily summaries sent")
-    except Exception as e:
-        logger.error(f"Error sending daily summaries: {str(e)}")
-    finally:
-        db.close()
-
-# Initialize scheduler for daily summaries
-scheduler = BackgroundScheduler()
-scheduler.add_job(send_daily_summary, CronTrigger(hour=0, minute=0))
-scheduler.start()
+def mark_notification_read(db: Session, notif_id: int):
+    return mark_read(db, notif_id)
