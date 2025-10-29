@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL")
 
     # JWT
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-for-jwt")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "56370eec20b1bd95c31dd517764adfdb8d3e9a2772b13c902822f236014303f73267ab154a5af82d11e3c539371721c42e9eaa7aaaaaac47bc8b33b8533f5584")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     MICROSOFT_CLIENT_ID: str = os.getenv("MICROSOFT_CLIENT_ID", "")
     MICROSOFT_CLIENT_SECRET: str = os.getenv("MICROSOFT_CLIENT_SECRET", "")
-    GITHUB_WEBHOOK_SECRET: str = os.getenv("GITHUB_WEBHOOK_SECRET", "replace-with-your-secret")
+    GITHUB_WEBHOOK_SECRET: str = os.getenv("GITHUB_WEBHOOK_SECRET", "")
 
     # Email
     MAIL_USERNAME: Optional[str] = os.getenv("MAIL_USERNAME")
@@ -36,5 +36,10 @@ class Settings(BaseSettings):
     MAIL_SERVER: Optional[str] = os.getenv("MAIL_SERVER")
     MAIL_STARTTLS: bool = os.getenv("MAIL_STARTTLS", "True").lower() == "true"
     MAIL_SSL_TLS: bool = os.getenv("MAIL_SSL_TLS", "False").lower() == "true"
+
+     # ✅ Supabase Storage
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY")
+    SUPABASE_BUCKET_NAME: str = os.getenv("SUPABASE_BUCKET_NAME", "teamIQ_Bucket")
 
 settings = Settings()

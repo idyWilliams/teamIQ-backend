@@ -5,7 +5,7 @@ from app.core.database import Base, engine
 
 from app.api.v1 import (
     auth, users, organizations, projects, tasks, dashboard,
-    integrations, invitations, skills, notifications
+    integrations, invitations, skills, notifications, upload
 )
 
 # Logger setup
@@ -63,7 +63,7 @@ app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["in
 app.include_router(invitations.router, prefix="/api/v1/invitations", tags=["invitations"])
 app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
-
+app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
 @app.get("/test-cors")
 def test_cors():
     return {"message": "CORS test successful"}
