@@ -3,9 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from app.core.database import Base, engine
 
+# Import all route modules
 from app.api.v1 import (
-    auth, users, organizations, projects, tasks, dashboard,
-    integrations, invitations, skills, notifications, upload
+    auth,
+    users,
+    organizations,
+    projects,  # This is your projects router
+    tasks,
+    dashboard,
+    integrations,
+    invitations,
+    skills,
+    notifications,
+    upload
 )
 
 # Logger setup
@@ -24,9 +34,14 @@ formatter = jsonlogger.JsonFormatter()
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
 
-# Import all models to ensure tables are created
-
-app = FastAPI(title="Teamiq Backend")
+# Initialize FastAPI app
+app = FastAPI(
+    title="TeamIQ Backend",
+    description="Backend API for TeamIQ Project Management Platform",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
 # CORS Middleware
 origins = [
@@ -45,25 +60,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Database initialization
 @app.on_event("startup")
 def on_startup():
+    """Create database tables on startup"""
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully.")
     except Exception as e:
         logger.error(f"Error creating tables on startup: {e}")
 
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
-app.include_router(organizations.router, prefix="/api/v1/organizations", tags=["organizations"])
-app.include_router(projects.router, prefix="/api/v1/projects", tags=["projects"])
-app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
-app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
-app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["integrations"])
-app.include_router(invitations.router, prefix="/api/v1/invitations", tags=["invitations"])
-app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
-app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
-app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
-@app.get("/test-cors")
+# Root endpoint
+@app.get("/", tags=["Health"])
+def root():
+    """Root endpoint - Health check"""
+    return {
+        "status": "healthy",
+        "message": "TeamIQ Backend API is running",
+        "version": "1.0.0"
+    }
+
+# Test endpoint
+@app.get("/test-cors", tags=["Health"])
 def test_cors():
+    """Test CORS configuration"""
     return {"message": "CORS test successful"}
+
+# Include all routers
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
+app.include_router(organizations.router, prefix="/api/v1/organizations", tags=["Organizations"])
+app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects"])  # ✅ Your projects routes
+app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations"])
+app.include_router(invitations.router, prefix="/api/v1/invitations", tags=["Invitations"])
+app.include_router(skills.router, prefix="/api/v1/skills", tags=["Skills"])
+app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
+app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
+
+# Error handler (optional but recommended)
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Global exception handler"""
+    logger.error(f"Global exception: {exc}", exc_info=True)
+    return {
+        "success": False,
+        "message": "An internal error occurred",
+        "error": str(exc)
+    }
