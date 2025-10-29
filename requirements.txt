@@ -75,6 +75,7 @@ click==8.3.0
 fastapi-cli==0.0.13
 fastapi-cloud-cli==0.3.1
 Authlib==1.6.5
+supabase==2.10.0
 
 # --------------------
 # PACKAGE MANAGEMENT UTILITIES
