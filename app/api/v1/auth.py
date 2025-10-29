@@ -140,8 +140,12 @@ def register_user(
     # Refresh to load all relationships and updated fields
     db.refresh(user_entity)
 
+    # Fetch organization details
+    organization = organization_repository.get_organization_by_id(db, user_entity.organization_id)
+    organization_out = OrganizationOut.model_validate(organization)
+
     # Generate access token
-    token = create_access_token(data={"sub": user_entity.email})
+    token = create_access_token(data={"sub": user_entity.email}, entity_type="user")
 
     return create_response(
         success=True,
@@ -149,7 +153,8 @@ def register_user(
         data=Token(
             access_token=token,
             token_type="bearer",
-            user=UserOut.model_validate(user_entity)
+            user=UserOut.model_validate(user_entity),
+            organization=organization_out
         )
     )
 
