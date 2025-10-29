@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_organization
+# from app.core.security import get_current_user_or_organization, get_current_organization
+from app.core.security import get_current_user_or_organization
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.project import Project, ProjectMember
@@ -33,7 +34,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 def create_project_step1(
     project_data: ProjectDetailsCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_or_organization)
 ):
     """
     Step 1: Create project with basic details
@@ -69,7 +70,7 @@ def update_project_pm_tool(
     project_id: int,
     pm_data: PMToolSetup,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_or_organization)
 ):
     """
     Step 2: Configure Project Management Tool integration
@@ -104,7 +105,7 @@ def update_project_version_control(
     project_id: int,
     vc_data: VCSetup,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_or_organization)
 ):
     """
     Step 3: Configure Version Control integration
@@ -139,7 +140,7 @@ def update_project_communication_tool(
     project_id: int,
     comm_data: CommToolSetup,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_or_organization)
 ):
     """
     Step 4: Configure Communication Tool integration
@@ -175,7 +176,7 @@ def add_project_members(
     project_id: int,
     members_data: UserPermissionSync,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_or_organization)
 ):
     """
     Step 5: Add team members to the project
@@ -218,7 +219,7 @@ def add_project_members(
 def create_complete_project(
     project_data: ProjectCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_or_organization)
 ):
     """
     Create a complete project with all steps in one request
@@ -285,7 +286,7 @@ def create_complete_project(
 def get_project(
     project_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_or_organization)
 ):
     """Get project details"""
     project = db.query(Project).filter(Project.id == project_id).first()
@@ -303,7 +304,7 @@ def get_project(
 @router.get("/")
 def list_projects(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_or_organization)
 ):
     """List all projects for the current user's organization"""
     projects = db.query(Project).filter(
