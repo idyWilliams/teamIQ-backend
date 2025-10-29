@@ -32,6 +32,7 @@ app = FastAPI(title="Teamiq Backend")
 origins = [
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:3001",
     "http://localhost:8000",
     "https://team-iq-frontend.vercel.app",
 ]
@@ -62,3 +63,7 @@ app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["in
 app.include_router(invitations.router, prefix="/api/v1/invitations", tags=["invitations"])
 app.include_router(skills.router, prefix="/api/v1/skills", tags=["skills"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
+
+@app.get("/test-cors")
+def test_cors():
+    return {"message": "CORS test successful"}

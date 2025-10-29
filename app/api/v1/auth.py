@@ -30,41 +30,119 @@ router = APIRouter(tags=["auth"])
 # ----------------------------
 
 
+# @router.post("/register/user")
+# def register_user(
+#     user: UserCreate,
+#     db: Session = Depends(get_db),
+#     invitation_code: str = Query(..., description="Invitation code is required for user registration")
+# ):
+#     invitation = get_invitation_by_code(db, invitation_code)
+#     if not invitation or invitation.is_used or invitation.expires_at < datetime.datetime.now(datetime.timezone.utc):
+#         raise HTTPException(status_code=400, detail="Invalid or expired invitation code")
+
+#     # Cannot register with an organization email
+#     existing_org = organization_repository.get_organization_by_email(db, user.email)
+#     if existing_org:
+#         raise HTTPException(status_code=400, detail="This email is registered to an organization")
+
+#     # Proceed
+#     existing_user = user_repository.get_user_by_email(db, user.email)
+#     if not existing_user:
+#         # Create a new user
+#         user_entity = user_repository.create_user(db, user)
+#         user_entity.organization_id = invitation.organization_id
+#         db.flush() # Assign an ID to the new user before linking
+#         link_user_to_org(db, user_entity.id, invitation.organization_id)
+#     else:
+#         # If user exists, check if they are already in the organization
+#         user_entity = existing_user
+#         user_orgs = {org.id for org in user_entity.organizations}
+#         if invitation.organization_id not in user_orgs:
+#             link_user_to_org(db, user_entity.id, invitation.organization_id)
+
+#     invitation.is_used = True
+#     db.commit()
+#     db.refresh(user_entity)
+
+#     token = create_access_token(data={"sub": user_entity.email})
+#     return create_response(
+#         success=True,
+#         message="User registration completed successfully",
+#         data=Token(
+#             access_token=token,
+#             token_type="bearer",
+#             user=UserOut.model_validate(user_entity)
+#         )
+#     )
+
 @router.post("/register/user")
 def register_user(
     user: UserCreate,
     db: Session = Depends(get_db),
     invitation_code: str = Query(..., description="Invitation code is required for user registration")
 ):
+    """
+    Register a new user with an invitation code.
+    If user already exists, adds them to the invited organization.
+    """
+    # Validate invitation code
     invitation = get_invitation_by_code(db, invitation_code)
-    if not invitation or invitation.is_used or invitation.expires_at < datetime.datetime.utcnow():
+    if not invitation or invitation.is_used or invitation.expires_at < datetime.datetime.now(datetime.timezone.utc):
         raise HTTPException(status_code=400, detail="Invalid or expired invitation code")
 
-    # Cannot register with an organization email
+    # Prevent registration with organization email
     existing_org = organization_repository.get_organization_by_email(db, user.email)
     if existing_org:
         raise HTTPException(status_code=400, detail="This email is registered to an organization")
 
-    # Proceed
+    # Check if user already exists
     existing_user = user_repository.get_user_by_email(db, user.email)
+
     if not existing_user:
-        # Create a new user
-        new_user = user_repository.create_user(db, user, organization_id=None)
-        db.commit()
-        db.refresh(new_user)
-        user_entity = new_user
+        # === NEW USER REGISTRATION ===
+
+        # Create user (not committed yet)
+        user_entity = user_repository.create_user(
+            db=db,
+            user=user,
+            organization_id=invitation.organization_id
+        )
+
+        # Flush to assign ID to user_entity before using it in foreign key
+        db.flush()
+
+        # Now user_entity.id is available - link to organization
+        link_user_to_org(db, user_entity.id, invitation.organization_id)
+
     else:
+        # === EXISTING USER - ADD TO NEW ORGANIZATION ===
+
         user_entity = existing_user
 
- 
-    link_user_to_org(db, user_entity.id, invitation.organization_id)
+        # Update primary organization if not set
+        if not user_entity.organization_id:
+            user_entity.organization_id = invitation.organization_id
 
+        # Check if already linked to this organization
+        user_orgs = {org.id for org in user_entity.organizations}
 
+        if invitation.organization_id not in user_orgs:
+            # Link existing user to the new organization
+            # user_entity.id already exists, no need to flush
+            link_user_to_org(db, user_entity.id, invitation.organization_id)
+
+    # Mark invitation as used
     invitation.is_used = True
+
+    # Commit all changes as a single transaction
     db.commit()
+
+    # Refresh to load all relationships and updated fields
     db.refresh(user_entity)
 
+    # Generate access token
     token = create_access_token(data={"sub": user_entity.email})
+
     return create_response(
         success=True,
         message="User registration completed successfully",
@@ -74,7 +152,6 @@ def register_user(
             user=UserOut.model_validate(user_entity)
         )
     )
-
 
 
 # ----------------------------
