@@ -9,6 +9,10 @@ def get_user_by_email(db: Session, email: str):
     """Get user by email (case-insensitive)"""
     return db.query(User).filter(User.email == email.lower()).first()
 
+def get_user_by_username(db: Session, username: str):
+    """Get user by username (case-insensitive)"""
+    return db.query(User).filter(User.username == username).first()
+
 
 def get_users_by_organization(db: Session, organization_id: int):
     """Get all users belonging to an organization"""
@@ -28,11 +32,19 @@ def create_user(db: Session, user: UserCreate, organization_id: int = None):
         User object (not yet committed/flushed)
     """
     # Check if email already exists
-    db_user = get_user_by_email(db, user.email)
-    if db_user:
+    db_user_by_email = get_user_by_email(db, user.email)
+    if db_user_by_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
+        )
+
+    # Check if username already exists
+    db_user_by_username = get_user_by_username(db, user.username)
+    if db_user_by_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
         )
 
     # Hash the password

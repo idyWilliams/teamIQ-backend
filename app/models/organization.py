@@ -33,7 +33,12 @@ class Organization(Base):
     # users = relationship("User", back_populates="organization")
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
     updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Fixed: Added server_default for INSERT
-    users = relationship("User",
-                         secondary="user_organizations",
-                         back_populates="organizations")
+    users = relationship(
+        "User",
+        secondary="user_organizations",
+        back_populates="organizations"
+    )
+    # Projects belonging to this organization (matches Project.organization.back_populates)
+    projects = relationship("Project", back_populates="organization")
+
     integrations = relationship("OrganizationIntegration", back_populates="organization")

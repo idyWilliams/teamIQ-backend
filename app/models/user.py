@@ -25,8 +25,11 @@ class User(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"))
     # organization = relationship("Organization", back_populates="users")
     tasks = relationship("Task", back_populates="owner")
-    owned_projects = relationship("Project", back_populates="owner")
-    projects = relationship("Project", foreign_keys="[Project.owner_id]")
+    owned_projects = relationship(
+        "Project",
+        back_populates="owner",
+        foreign_keys="[Project.owner_id]",  # explicitly use Project.owner_id
+    )
     user_skills = relationship("UserSkill", back_populates="user")
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
     updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pathlib import Path
 from app.core.database import Base, engine
 
@@ -102,10 +103,16 @@ app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
 # Error handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    """Global exception handler"""
-    logger.error(f"Global exception: {exc}", exc_info=True)
-    return {
-        "success": False,
-        "message": "An internal error occurred",
-        "error": str(exc)
-    }
+    """Global exception handler to catch all unhandled exceptions."""
+    # In a production environment, you would want to return a generic error message.
+    # For development, we can return more detailed information.
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "message": "An unexpected internal server error occurred.",
+            "error_type": type(exc).__name__,
+            "error_details": str(exc)
+        }
+    )

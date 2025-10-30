@@ -58,7 +58,7 @@ class Project(Base):
     comm_notifications = Column(JSON, nullable=True)  # Notification preferences
 
     # Metadata
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"))
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     status = Column(Enum(ProjectStatus), default=ProjectStatus.ACTIVE)
     pct_complete = Column(Float, default=0.0)
@@ -67,7 +67,11 @@ class Project(Base):
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     # Relationships
-    owner = relationship("User", foreign_keys=[owner_id], back_populates="owned_projects")
+    owner = relationship(
+        "User",
+        foreign_keys=[owner_id],            # disambiguate which FK links to User
+        back_populates="owned_projects",
+    )
     project_lead = relationship("User", foreign_keys=[project_lead_id])
     organization = relationship("Organization", back_populates="projects")
     members = relationship("ProjectMember", back_populates="project")
