@@ -36,3 +36,4 @@ class Organization(Base):
     users = relationship("User",
                          secondary="user_organizations",
                          back_populates="organizations")
+    integrations = relationship("OrganizationIntegration", back_populates="organization")
