@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.repositories.notification_repository import create_notification, get_notifications, mark_read
 from app.schemas.notification import NotificationCreate
-from app.models.user import User  # optional, used only if you want to look up user details
+from app.models.user import User  
 from app.core.websocket_manager import manager
 
 # keep logging
@@ -17,17 +17,11 @@ logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 load_dotenv()
 
-# NOTE: email/slack pieces have been intentionally removed from the primary flow.
-# The pattern now is: create DB notification and broadcast to connected WebSocket clients.
 
 async def trigger_notification(db: Session, user_or_org_key: str, title: str, message: str, type: str = "info"):
-    """
-    Create a notification in DB and broadcast it to the connected client identified by user_or_org_key.
-    user_or_org_key should be in the format "user:<id>" or "org:<id>".
-    """
+   
     try:
-        # prepare notification create schema
-        # Extract numeric ids so we save to DB properly:
+      
         user_id = None
         org_id = None
         if user_or_org_key.startswith("user:"):
