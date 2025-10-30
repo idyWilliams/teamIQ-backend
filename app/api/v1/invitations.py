@@ -10,7 +10,7 @@ from app.models.organization import Organization
 import datetime
 import logging
 
-router = APIRouter(tags=["invitations"])
+router = APIRouter()
 logger = logging.getLogger("invitations")
 
 @router.post("/", response_model=APIResponse, status_code=status.HTTP_201_CREATED)

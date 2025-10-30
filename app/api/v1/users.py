@@ -9,7 +9,7 @@ from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 
 
-router = APIRouter(tags=["users"])
+router = APIRouter()
 
 
 @router.get("/organization/users")

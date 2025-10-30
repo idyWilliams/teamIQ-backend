@@ -7,7 +7,7 @@ from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 from typing import List
 
-router = APIRouter(tags=["notifications"])
+router = APIRouter()
 
 @router.post("/", response_model=NotificationOut)
 def create_notification(notif: NotificationCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user_or_organization)):

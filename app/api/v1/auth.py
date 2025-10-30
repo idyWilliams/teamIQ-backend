@@ -22,7 +22,7 @@ from app.schemas.user import UserCreate, UserOut
 from app.schemas.organization import OrganizationSignUp, OrganizationOut
 from app.schemas.auth import Token, PasswordResetRequest, PasswordResetConfirm, LoginRequest
 
-router = APIRouter(tags=["auth"])
+router = APIRouter()
 
 
 # ----------------------------

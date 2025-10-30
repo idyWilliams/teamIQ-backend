@@ -8,7 +8,7 @@ from app.models.organization import Organization
 from typing import Optional, Union
 from enum import Enum
 
-router = APIRouter(prefix="/upload", tags=["Upload"])
+router = APIRouter()
 
 
 # Define allowed image types

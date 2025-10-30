@@ -9,7 +9,7 @@ from app.schemas.response_model import create_response
 from app.core.security import get_current_user_or_organization
 from app.models.task import TaskStatus
 
-router = APIRouter(tags=["tasks"])
+router = APIRouter()
 
 @router.post("/")
 def create_task_for_user(task: TaskCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user_or_organization)):

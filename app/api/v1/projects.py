@@ -23,7 +23,7 @@ from app.schemas.response_model import create_response
 from app.repositories import project_repository
 
 
-router = APIRouter(tags=["projects"])
+router = APIRouter()
 
 
 # ------------------------

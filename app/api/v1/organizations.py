@@ -18,7 +18,7 @@ from app.core.security import create_access_token
 from app.core.email_utils import send_organization_signup_email, send_onboarding_complete_email
 from app.schemas.auth import Token
 
-router = APIRouter(tags=["organizations"])
+router = APIRouter()
 
 
 # @router.post("/signup", status_code=201)
