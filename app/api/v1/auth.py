@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Optional
 import datetime
@@ -250,7 +250,7 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 # PASSWORD RESET REQUEST
 # ----------------------------
 @router.post("/password-reset")
-async def request_password_reset(request: PasswordResetRequest, db: Session = Depends(get_db)):
+async def request_password_reset(request: PasswordResetRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     email = request.email.lower()
     user_obj = user_repository.get_user_by_email(db, email) or \
                organization_repository.get_organization_by_email(db, email)
@@ -260,11 +260,16 @@ async def request_password_reset(request: PasswordResetRequest, db: Session = De
         return create_response(success=True, message="If the email exists, a reset link has been sent")
 
     token = create_reset_token(email)
-    reset_link = f"https://team-iq-frontend.vercel.app/reset?token={token}"
+    reset_link = f"https://team-iq-frontend.vercel.app/reset-password?token={token}"
 
-    await send_password_reset_email(email, reset_link)
+    background_tasks.add_task(send_password_reset_email, email, reset_link)
 
-    return create_response(success=True, message="Reset email sent")
+
+    return create_response(
+        success=True,
+        message="Reset email sent",
+        data={"reset_link": reset_link}
+    )
 
 
 
@@ -282,8 +287,18 @@ def confirm_password_reset(confirm: PasswordResetConfirm, db: Session = Depends(
     if not user_obj:
         raise HTTPException(status_code=404, detail="User not found")
 
-    hashed_pw = get_password_hash(confirm.new_password)
-    user_obj.hashed_password = hashed_pw
-    db.commit()
+    try:
+        hashed_pw = get_password_hash(confirm.new_password)
+        user_obj.hashed_password = hashed_pw
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        # In a real-world app, you'd want to log this error.
+        # from app.core.logger import logger
+        # logger.error(f"Error during password reset confirmation: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while updating the password. Please try again."
+        )
 
     return create_response(success=True, message="Password reset successful")

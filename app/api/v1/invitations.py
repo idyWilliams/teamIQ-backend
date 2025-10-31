@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.invitation import InvitationCreate, InvitationOut
@@ -16,6 +16,7 @@ logger = logging.getLogger("invitations")
 @router.post("/", response_model=APIResponse, status_code=status.HTTP_201_CREATED)
 def create_invitation(
     invitation: InvitationCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_or_organization)
 ):
@@ -46,15 +47,4 @@ def create_invitation(
     db_inv = invitation_repository.create_invitation(db, invitation, current_user.id)
 
     invite_link = f"https://team-iq-frontend.vercel.app/signup?invitation_code={db_inv.invitation_code}?email={invitation.email}"
-    send_invitation_email(invitation.email, invite_link)
-
-    logger.info(f"📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 Invitation email sent to {invitation.email} (OrgID={current_user.id}) link: {invite_link}📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 📧 ")
-
-    invitation_out = InvitationOut.model_validate(db_inv)
-    invitation_out.invite_link = invite_link
-
-    return create_response(
-        success=True,
-        message=f"Invitation sent to {invitation.email}",
-        data=invitation_out
-    )
+    background_tasks.add_task(send_invitation_email, invitation.email, invite_link)
