@@ -22,7 +22,11 @@ def create_invitation(
 ):
     """Allows an organization to invite users while enforcing global email uniqueness"""
     if not isinstance(current_user, Organization):
-        raise HTTPException(status_code=403, detail="Only organizations can send invitations")
+        user_type = type(current_user).__name__
+        raise HTTPException(
+            status_code=403,
+            detail=f"Only organizations can send invitations, but you are authenticated as a '{user_type}'. Please log in as an organization."
+        )
 
     # Check if email is used by an organization — orgs cannot be invited
     existing_org = organization_repository.get_organization_by_email(db, invitation.email)
