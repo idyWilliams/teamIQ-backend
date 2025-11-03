@@ -52,3 +52,14 @@ def create_invitation(
 
     invite_link = f"https://team-iq-frontend.vercel.app/signup?invitation_code={db_inv.invitation_code}?email={invitation.email}"
     background_tasks.add_task(send_invitation_email, invitation.email, invite_link)
+
+    logger.info(f"Invitation email sent to {invitation.email} (OrgID={current_user.id}) link: {invite_link}")
+
+    invitation_out = InvitationOut.model_validate(db_inv)
+    invitation_out.invite_link = invite_link
+
+    return create_response(
+        success=True,
+        message=f"Invitation sent to {invitation.email}",
+        data=invitation_out
+    )
