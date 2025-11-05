@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status
+from typing import Union
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials  # Changed this line
 from sqlalchemy.orm import Session
 from app.core.database import get_db

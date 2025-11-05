@@ -37,6 +37,8 @@ def create_project_step1(
     """
     Step 1: Create project with basic details
     """
+    print(f"Current user type: {type(current_user)}")
+    print(f"Current user attributes: {current_user.__dict__}")
     # Only organizations can create projects
     if not isinstance(current_user, Organization):
         raise HTTPException(status_code=403, detail="Only organizations can create projects")
