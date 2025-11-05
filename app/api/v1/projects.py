@@ -19,6 +19,7 @@ from app.schemas.project import (
 )
 from app.schemas.response_model import create_response
 from app.repositories import project_repository
+from app.tasks.sync_scheduler import sync_single_project, get_scheduler_status
 
 router = APIRouter()
 
@@ -36,13 +37,13 @@ def create_project_step1(
     """
     Step 1: Create project with basic details
     """
-    # Only organizations can create projects
+
     if not isinstance(current_user, Organization):
         raise HTTPException(status_code=403, detail="Only organizations can create projects")
 
     organization_id = current_user.id
-    owner_id = None  # No owner at this stage
-    project_lead_id = None  # No project lead at this stage
+    owner_id = None
+    project_lead_id = None
 
     # Create initial project
     new_project = Project(
@@ -85,7 +86,7 @@ def update_project_pm_tool(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # ✅ FIXED: Handle many-to-many relationship
+
     if isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         if project.organization_id not in user_org_ids:
@@ -102,6 +103,7 @@ def update_project_pm_tool(
     project.pm_project_id = pm_data.pm_project_id
     project.pm_api_key = pm_data.pm_api_key
     project.pm_access_token = pm_data.pm_access_token
+    project.pm_workspace_url = pm_data.pm_workspace_url
 
     db.commit()
     db.refresh(project)
@@ -128,7 +130,7 @@ def update_project_version_control(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # ✅ FIXED: Handle many-to-many relationship
+
     if isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         if project.organization_id not in user_org_ids:
@@ -171,7 +173,7 @@ def update_project_communication_tool(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # ✅ FIXED: Handle many-to-many relationship
+
     if isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         if project.organization_id not in user_org_ids:
@@ -200,7 +202,7 @@ def update_project_communication_tool(
     )
 
 
-@router.post("/{project_id}/step5-add-members")
+@router.patch("/{project_id}/step5-add-members")
 def add_project_members(
     project_id: int,
     members_data: UserPermissionSync,
@@ -215,7 +217,7 @@ def add_project_members(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # ✅ FIXED: Handle many-to-many relationship
+
     if isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         if project.organization_id not in user_org_ids:
@@ -226,10 +228,9 @@ def add_project_members(
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
 
-    # Clear existing members (optional - or check for duplicates)
     db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
 
-    # Add new members
+
     for member in members_data.members:
         project_member = ProjectMember(
             project_id=project_id,
@@ -382,4 +383,57 @@ def list_projects(
         success=True,
         message="Projects retrieved successfully",
         data=[ProjectResponse.model_validate(p) for p in projects]
+    )
+
+
+
+
+@router.post("/{project_id}/sync-now")
+def trigger_immediate_sync(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Manually trigger integration sync for a specific project
+    Useful for testing or immediate updates
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Authorization check
+    if isinstance(current_user, User):
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif isinstance(current_user, Organization):
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Trigger sync
+    results = sync_single_project(project_id)
+
+    return create_response(
+        success="error" not in str(results),
+        message="Integration sync completed",
+        data=results
+    )
+
+
+@router.get("/scheduler/status")
+def get_sync_scheduler_status(
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Get status of the background sync scheduler
+    Admin/debugging endpoint
+    """
+    status = get_scheduler_status()
+
+    return create_response(
+        success=True,
+        message="Scheduler status retrieved",
+        data=status
     )

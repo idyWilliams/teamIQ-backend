@@ -40,6 +40,7 @@ class Project(Base):
     pm_project_id = Column(String, nullable=True)
     pm_api_key = Column(String, nullable=True)
     pm_access_token = Column(String, nullable=True)
+    pm_workspace_url = Column(String, nullable=True)
 
     # Step 3: Version Control
     vc_tool = Column(String, nullable=True)

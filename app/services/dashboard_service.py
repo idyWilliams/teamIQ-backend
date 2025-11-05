@@ -8,7 +8,8 @@ from app.models.task import Task, TaskStatus
 from app.models.project import Project, ProjectStatus
 from app.models.user import User
 from app.models.skill import UserSkill, Skill
-from app.models.organization import UserRole
+from app.models.organization import UserRole, Organization
+
 
 def compute_task_stats(db: Session, user_id: int):
     total = db.query(func.count(Task.id)).filter(Task.owner_id == user_id).scalar() or 0
@@ -23,6 +24,7 @@ def compute_task_stats(db: Session, user_id: int):
     change = ((recent_completed - prev_completed) / prev_completed * 100) if prev_completed else 0.0 if not recent_completed else 100.0
     return {"tasks_total": total, "tasks_completed": completed, "tasks_pending": pending, "completion_rate": rate, "completion_rate_change": change}
 
+
 def compute_skill_summary(db: Session, user_id: int) -> Dict[str, float]:
     rows = (
         db.query(Skill.name, UserSkill.level)
@@ -31,6 +33,7 @@ def compute_skill_summary(db: Session, user_id: int) -> Dict[str, float]:
         .all()
     )
     return {name: float(level) for name, level in rows}
+
 
 def compute_timeseries(db: Session, user_id: int, days: int = 30) -> List[Dict]:
     since = datetime.utcnow() - timedelta(days=days)
@@ -43,10 +46,12 @@ def compute_timeseries(db: Session, user_id: int, days: int = 30) -> List[Dict]:
     )
     return [{"date": row.day.date().isoformat(), "value": int(row[1])} for row in rows]
 
+
 def compute_project_stats(db: Session, user_id: int):
     active = db.query(func.count(Project.id)).filter(Project.owner_id == user_id, Project.status == ProjectStatus.ACTIVE).scalar() or 0
     progress = db.query(func.avg(Project.pct_complete)).filter(Project.owner_id == user_id).scalar() or 0.0
     return {"active_projects": active, "overall_progress": int(progress)}
+
 
 def compute_and_upsert_dashboard_metrics(db: Session, user_id: int):
     task_stats = compute_task_stats(db, user_id)
@@ -67,7 +72,7 @@ def compute_and_upsert_dashboard_metrics(db: Session, user_id: int):
     metrics.completion_rate = task_stats["completion_rate"]
     metrics.completion_rate_change = task_stats["completion_rate_change"]
     metrics.overall_score = (task_stats["completion_rate"] + project_stats["overall_progress"]) / 2
-    metrics.skills_summary = list(skills.items())  # [{"skill": k, "level": v}]
+    metrics.skills_summary = list(skills.items())
     metrics.contributions_timeseries = series
     metrics.last_updated = datetime.utcnow()
 
@@ -75,11 +80,26 @@ def compute_and_upsert_dashboard_metrics(db: Session, user_id: int):
     db.refresh(metrics)
     return metrics
 
+
 def get_cached_dashboard(db: Session, user_id: int):
     return db.query(DashboardMetrics).filter(DashboardMetrics.user_id == user_id).first()
 
+
 def compute_org_metrics(db: Session, org_id: int):
-    interns = db.query(User).filter(User.organization_id == org_id, User.role == UserRole.INTERN).all()
+    """
+    Compute organization dashboard metrics using many-to-many relationship
+    """
+    # ✅ FIXED: Query users who belong to this organization via many-to-many
+    interns = (
+        db.query(User)
+        .join(User.organizations)  # Join through the many-to-many relationship
+        .filter(
+            Organization.id == org_id,
+            User.role == UserRole.INTERN
+        )
+        .all()
+    )
+
     if not interns:
         return None
 
@@ -100,11 +120,28 @@ def compute_org_metrics(db: Session, org_id: int):
         tasks_completed += metrics.tasks_completed
         tasks_pending += metrics.tasks_pending
 
-    # Active projects via join
-    active_projects = db.query(func.count(Project.id)).join(User).filter(User.organization_id == org_id, Project.status == ProjectStatus.ACTIVE).scalar() or 0
+    # ✅ FIXED: Active projects - query by organization_id directly
+    active_projects = (
+        db.query(func.count(Project.id))
+        .filter(
+            Project.organization_id == org_id,
+            Project.status == ProjectStatus.ACTIVE
+        )
+        .scalar() or 0
+    )
+
     team_members = len(interns)
-    # Unassigned: owner_id None, org_id set
-    unassigned_tasks = db.query(func.count(Task.id)).filter(Task.owner_id.is_(None), Task.organization_id == org_id).scalar() or 0
+
+    # Unassigned tasks: owner_id None, org_id set
+    unassigned_tasks = (
+        db.query(func.count(Task.id))
+        .filter(
+            Task.owner_id.is_(None),
+            Task.organization_id == org_id
+        )
+        .scalar() or 0
+    )
+
     team_performance = (sum(rates) / team_members) if team_members else 0.0
     task_completion_trend = 5.0  # Placeholder
 
@@ -132,6 +169,7 @@ def compute_org_metrics(db: Session, org_id: int):
     db.commit()
     db.refresh(org_metrics)
     return org_metrics
+
 
 def get_cached_org_dashboard(db: Session, org_id: int):
     return db.query(OrgDashboardMetrics).filter(OrgDashboardMetrics.org_id == org_id).first()

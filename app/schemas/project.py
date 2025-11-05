@@ -37,6 +37,7 @@ class PMToolSetup(BaseModel):
     pm_project_id: Optional[str] = None
     pm_api_key: Optional[str] = None
     pm_access_token: Optional[str] = None
+    pm_workspace_url: Optional[str] = None
 
 
 # Step 3: Version Control Setup
@@ -124,7 +125,7 @@ class ProjectResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
-    owner_id: Optional[int]  
+    owner_id: Optional[int]
     organization_id: Optional[int]
     project_lead_id: Optional[int]
     stacks: Optional[List[str]]

@@ -37,9 +37,14 @@ class Settings(BaseSettings):
     MAIL_STARTTLS: bool = os.getenv("MAIL_STARTTLS", "True").lower() == "true"
     MAIL_SSL_TLS: bool = os.getenv("MAIL_SSL_TLS", "False").lower() == "true"
 
-     # ✅ Supabase Storage
+     # Supabase Storage
     SUPABASE_URL: str = os.getenv("SUPABASE_URL")
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY")
     SUPABASE_BUCKET_NAME: str = os.getenv("SUPABASE_BUCKET_NAME", "teamIQ_Bucket")
+
+    # Integration Sync Settings
+    SYNC_INTERVAL_MINUTES: int = 15
+    SYNC_ENABLED: bool = True
+    SYNC_BATCH_SIZE: int = 10
 
 settings = Settings()
