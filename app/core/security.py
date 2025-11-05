@@ -35,41 +35,9 @@ def verify_reset_token(token: str):
     except JWTError:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-def get_current_user_or_organization(
-    credentials: HTTPAuthorizationCredentials = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-):
-    token = credentials.credentials
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        entity_type: str = payload.get("entity_type", "user")  # Default to 'user' for backward compatibility
-
-        if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    if entity_type == "organization":
-        organization = organization_repository.get_organization_by_email(db, email=email)
-        if organization:
-            return organization
-    elif entity_type == "user":
-        user = user_repository.get_user_by_email(db, email=email)
-        if user:
-            return user
-    else: # Fallback for older tokens without entity_type
-        user = user_repository.get_user_by_email(db, email=email)
-        if user:
-            return user
-
-        organization = organization_repository.get_organization_by_email(db, email=email)
-        if organization:
-            return organization
-
-    raise credentials_exception
+def get_current_organization(
+    current_user: Union[User, Organization] = Depends(get_current_user_or_organization)
+) -> Organization:
+    if not isinstance(current_user, Organization):
+        raise HTTPException(status_code=403, detail="Only organizations can perform this action")
+    return current_user

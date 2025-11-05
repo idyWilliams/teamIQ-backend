@@ -1,11 +1,9 @@
-# app/api/v1/projects.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Union
 
 from app.core.database import get_db
-# from app.core.security import get_current_user_or_organization, get_current_organization
-from app.core.security import get_current_user_or_organization
+from app.core.security import get_current_organization
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.project import Project, ProjectMember
@@ -34,17 +32,24 @@ router = APIRouter()
 def create_project_step1(
     project_data: ProjectDetailsCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_or_organization)
+    current_user: Organization = Depends(get_current_organization)
 ):
     """
     Step 1: Create project with basic details
     """
+    # Only organizations can create projects
+    if not isinstance(current_user, Organization):
+        raise HTTPException(status_code=403, detail="Only organizations can create projects")
+
+    organization_id = current_user.id
+    owner_id = project_data.project_lead_id # The project lead is the owner
+
     # Create initial project
     new_project = Project(
         name=project_data.name,
         description=project_data.description,
-        owner_id=current_user.id,
-        organization_id=current_user.organization_id,
+        owner_id=owner_id,
+        organization_id=organization_id,
         project_lead_id=project_data.project_lead_id,
         stacks=project_data.stacks,
         start_date=project_data.start_date,
@@ -70,7 +75,7 @@ def update_project_pm_tool(
     project_id: int,
     pm_data: PMToolSetup,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_or_organization)
 ):
     """
     Step 2: Configure Project Management Tool integration
@@ -80,7 +85,14 @@ def update_project_pm_tool(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if project.owner_id != current_user.id:
+    if isinstance(current_user, User):
+        organization_id = current_user.organization_id
+    elif isinstance(current_user, Organization):
+        organization_id = current_user.id
+    else:
+        raise HTTPException(status_code=403, detail="Invalid user type")
+
+    if project.organization_id != organization_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this project")
 
     # Update PM tool settings
@@ -105,7 +117,7 @@ def update_project_version_control(
     project_id: int,
     vc_data: VCSetup,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_or_organization)
 ):
     """
     Step 3: Configure Version Control integration
@@ -115,7 +127,14 @@ def update_project_version_control(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if project.owner_id != current_user.id:
+    if isinstance(current_user, User):
+        organization_id = current_user.organization_id
+    elif isinstance(current_user, Organization):
+        organization_id = current_user.id
+    else:
+        raise HTTPException(status_code=403, detail="Invalid user type")
+
+    if project.organization_id != organization_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this project")
 
     # Update VC settings
@@ -140,7 +159,7 @@ def update_project_communication_tool(
     project_id: int,
     comm_data: CommToolSetup,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_or_organization)
 ):
     """
     Step 4: Configure Communication Tool integration
@@ -150,7 +169,14 @@ def update_project_communication_tool(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if project.owner_id != current_user.id:
+    if isinstance(current_user, User):
+        organization_id = current_user.organization_id
+    elif isinstance(current_user, Organization):
+        organization_id = current_user.id
+    else:
+        raise HTTPException(status_code=403, detail="Invalid user type")
+
+    if project.organization_id != organization_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this project")
 
     # Update communication tool settings
@@ -176,7 +202,7 @@ def add_project_members(
     project_id: int,
     members_data: UserPermissionSync,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_or_organization)
 ):
     """
     Step 5: Add team members to the project
@@ -186,7 +212,14 @@ def add_project_members(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if project.owner_id != current_user.id:
+    if isinstance(current_user, User):
+        organization_id = current_user.organization_id
+    elif isinstance(current_user, Organization):
+        organization_id = current_user.id
+    else:
+        raise HTTPException(status_code=403, detail="Invalid user type")
+
+    if project.organization_id != organization_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this project")
 
     # Clear existing members (optional - or check for duplicates)
@@ -219,17 +252,26 @@ def add_project_members(
 def create_complete_project(
     project_data: ProjectCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_or_organization)
 ):
     """
     Create a complete project with all steps in one request
     """
+    if isinstance(current_user, User):
+        organization_id = current_user.organization_id
+        owner_id = current_user.id
+    elif isinstance(current_user, Organization):
+        organization_id = current_user.id
+        owner_id = project_data.project_lead_id
+    else:
+        raise HTTPException(status_code=403, detail="Invalid user type")
+        
     new_project = Project(
         # Step 1
         name=project_data.name,
         description=project_data.description,
-        owner_id=current_user.id,
-        organization_id=current_user.organization_id,
+        owner_id=owner_id,
+        organization_id=organization_id,
         project_lead_id=project_data.project_lead_id,
         stacks=project_data.stacks,
         start_date=project_data.start_date,
@@ -286,13 +328,23 @@ def create_complete_project(
 def get_project(
     project_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_or_organization)
 ):
     """Get project details"""
     project = db.query(Project).filter(Project.id == project_id).first()
 
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    if isinstance(current_user, User):
+        organization_id = current_user.organization_id
+    elif isinstance(current_user, Organization):
+        organization_id = current_user.id
+    else:
+        raise HTTPException(status_code=403, detail="Invalid user type")
+
+    if project.organization_id != organization_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this project")
 
     return create_response(
         success=True,
@@ -304,11 +356,18 @@ def get_project(
 @router.get("/")
 def list_projects(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_or_organization)
 ):
     """List all projects for the current user's organization"""
+    if isinstance(current_user, User):
+        organization_id = current_user.organization_id
+    elif isinstance(current_user, Organization):
+        organization_id = current_user.id
+    else:
+        raise HTTPException(status_code=403, detail="Invalid user type")
+        
     projects = db.query(Project).filter(
-        Project.organization_id == current_user.organization_id
+        Project.organization_id == organization_id
     ).all()
 
     return create_response(

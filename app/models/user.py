@@ -38,5 +38,4 @@ class User(Base):
                                  secondary="user_organizations",
                                  back_populates="users")
     track = Column(String, nullable=True)
-    user_stacks = relationship("UserStack", back_populates="user")
     stacks = relationship("Stack", secondary="user_stacks", back_populates="users")

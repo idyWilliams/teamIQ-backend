@@ -7,5 +7,4 @@ class UserStack(Base):
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
     stack_id = Column(Integer, ForeignKey("stacks.id"), primary_key=True)
 
-    user = relationship("User", back_populates="user_stacks")
-    stack = relationship("Stack", back_populates="users")
+

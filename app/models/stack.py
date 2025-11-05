@@ -7,4 +7,4 @@ class Stack(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
 
-    users = relationship("UserStack", back_populates="stack")
+    users = relationship("User", secondary="user_stacks", back_populates="stacks")
