@@ -200,7 +200,53 @@ def update_project_communication_tool(
     )
 
 
-@router.post("/{project_id}/step5-add-members")
+# @router.post("/{project_id}/step5-add-members")
+# def add_project_members(
+#     project_id: int,
+#     members_data: UserPermissionSync,
+#     db: Session = Depends(get_db),
+#     current_user = Depends(get_current_user_or_organization)
+# ):
+#     """
+#     Step 5: Add team members to the project
+#     """
+#     project = db.query(Project).filter(Project.id == project_id).first()
+
+#     if not project:
+#         raise HTTPException(status_code=404, detail="Project not found")
+
+
+#     if isinstance(current_user, User):
+#         user_org_ids = [org.id for org in current_user.organizations]
+#         if project.organization_id not in user_org_ids:
+#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
+#     elif isinstance(current_user, Organization):
+#         if project.organization_id != current_user.id:
+#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
+#     else:
+#         raise HTTPException(status_code=403, detail="Invalid user type")
+
+#     # Clear
+#     db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
+
+#     # Add
+#     for member in members_data.members:
+#         project_member = ProjectMember(
+#             project_id=project_id,
+#             user_id=member.user_id,
+#             role=member.role
+#         )
+#         db.add(project_member)
+
+#     db.commit()
+#     db.refresh(project)
+
+#     return create_response(
+#         success=True,
+#         message="Team members added successfully",
+#         data=ProjectResponse.model_validate(project)
+#     )
+@router.patch("/{project_id}/step5-add-members")
 def add_project_members(
     project_id: int,
     members_data: UserPermissionSync,
@@ -208,14 +254,14 @@ def add_project_members(
     current_user = Depends(get_current_user_or_organization)
 ):
     """
-    Step 5: Add team members to the project
+    Step 5: Add team members to the project (partial update)
     """
     project = db.query(Project).filter(Project.id == project_id).first()
 
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # ✅ FIXED: Handle many-to-many relationship
+    # Authorization
     if isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         if project.organization_id not in user_org_ids:
@@ -226,7 +272,7 @@ def add_project_members(
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
 
-    # Clear existing members (optional - or check for duplicates)
+    # Clear
     db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
 
     # Add new members
