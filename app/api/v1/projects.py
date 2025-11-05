@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Union
 
 from app.core.database import get_db
-from app.core.security import get_current_organization
+from app.core.security import get_current_organization, get_current_user_or_organization
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.project import Project, ProjectMember
@@ -37,22 +37,20 @@ def create_project_step1(
     """
     Step 1: Create project with basic details
     """
-    print(f"Current user type: {type(current_user)}")
-    print(f"Current user attributes: {current_user.__dict__}")
     # Only organizations can create projects
     if not isinstance(current_user, Organization):
         raise HTTPException(status_code=403, detail="Only organizations can create projects")
 
     organization_id = current_user.id
-    owner_id = project_data.project_lead_id # The project lead is the owner
-
+    owner_id = None # No owner at this stage
+    project_lead_id = None # No project lead at this stage
     # Create initial project
     new_project = Project(
         name=project_data.name,
         description=project_data.description,
         owner_id=owner_id,
         organization_id=organization_id,
-        project_lead_id=project_data.project_lead_id,
+        project_lead_id=project_lead_id,
         stacks=project_data.stacks,
         start_date=project_data.start_date,
         end_date=project_data.end_date,
@@ -77,7 +75,9 @@ def update_project_pm_tool(
     project_id: int,
     pm_data: PMToolSetup,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_or_organization)
+    current_user = Depends(
+
+    )
 ):
     """
     Step 2: Configure Project Management Tool integration
@@ -267,7 +267,7 @@ def create_complete_project(
         owner_id = project_data.project_lead_id
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
-        
+
     new_project = Project(
         # Step 1
         name=project_data.name,
@@ -367,7 +367,7 @@ def list_projects(
         organization_id = current_user.id
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
-        
+
     projects = db.query(Project).filter(
         Project.organization_id == organization_id
     ).all()

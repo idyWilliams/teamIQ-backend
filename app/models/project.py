@@ -58,7 +58,8 @@ class Project(Base):
     comm_notifications = Column(JSON, nullable=True)  # Notification preferences
 
     # Metadata
-    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    project_lead_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     status = Column(Enum(ProjectStatus), default=ProjectStatus.ACTIVE)
     pct_complete = Column(Float, default=0.0)

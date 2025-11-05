@@ -6,6 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials  # Changed
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.repositories import user_repository, organization_repository
+from app.models.user import User
 from app.core.config import settings
 
 ALGORITHM = settings.ALGORITHM
@@ -59,6 +60,8 @@ def get_current_user_or_organization(
     if entity_type == "organization":
         organization = organization_repository.get_organization_by_email(db, email=email)
         if organization:
+            print("Returning organization from get_current_user_or_organization")
+            print(organization.__dict__)
             organization.entity_type = "organization"
             return organization
     elif entity_type == "user":
