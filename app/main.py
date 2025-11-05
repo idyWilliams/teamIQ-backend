@@ -9,7 +9,7 @@ from app.api.v1 import (
     auth,
     users,
     organizations,
-    projects,  # This is your projects router
+    projects,
     tasks,
     dashboard,
     integrations,
@@ -71,7 +71,7 @@ def on_startup():
     except Exception as e:
         logger.error(f"Error creating tables on startup: {e}")
 
-# Root 
+# Root
 @app.get("/", tags=["Health"])
 def root():
     """Root endpoint - Health check"""
@@ -104,8 +104,6 @@ app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler to catch all unhandled exceptions."""
-    # In a production environment, you would want to return a generic error message.
-    # For development, we can return more detailed information.
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
