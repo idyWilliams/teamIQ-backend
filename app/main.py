@@ -68,20 +68,21 @@ app = FastAPI(
 
 # CORS Middleware
 origins = [
-    "*",
     "http://localhost",
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:8000",
     "https://team-iq-frontend.vercel.app",
+    "https://teamiq-backend.onrender.com",
 ]
 
 app.add_middleware(
-    CORSMiddleware,
+ CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Database initialization
