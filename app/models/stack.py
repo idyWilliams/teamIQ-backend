@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
+
 class Stack(Base):
     __tablename__ = "stacks"
     id = Column(Integer, primary_key=True, index=True)

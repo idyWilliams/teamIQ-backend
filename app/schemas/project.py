@@ -1,4 +1,3 @@
-# app/schemas/project.py
 from pydantic import BaseModel, field_validator
 from typing import Optional, List, Dict
 import datetime
@@ -33,7 +32,7 @@ class ProjectDetailsCreate(BaseModel):
 
 # Step 2: Project Management Tool Setup
 class PMToolSetup(BaseModel):
-    pm_tool: Optional[str] = None  # jira, linear, clickup
+    pm_tool: Optional[str] = None
     pm_integration_method: Optional[IntegrationMethod] = None
     pm_project_id: Optional[str] = None
     pm_api_key: Optional[str] = None
@@ -42,7 +41,7 @@ class PMToolSetup(BaseModel):
 
 # Step 3: Version Control Setup
 class VCSetup(BaseModel):
-    vc_tool: Optional[str] = None  # github, gitlab, bitbucket
+    vc_tool: Optional[str] = None
     vc_integration_method: Optional[IntegrationMethod] = None
     vc_repository_url: Optional[str] = None
     vc_api_key: Optional[str] = None
@@ -51,7 +50,7 @@ class VCSetup(BaseModel):
 
 # Step 4: Communication Tool Setup
 class CommToolSetup(BaseModel):
-    comm_tool: Optional[str] = None  # slack, discord, teams
+    comm_tool: Optional[str] = None
     comm_integration_method: Optional[IntegrationMethod] = None
     comm_channel_id: Optional[str] = None
     comm_api_key: Optional[str] = None
@@ -125,7 +124,7 @@ class ProjectResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
-    owner_id: int
+    owner_id: Optional[int]  
     organization_id: Optional[int]
     project_lead_id: Optional[int]
     stacks: Optional[List[str]]

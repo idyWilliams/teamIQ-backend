@@ -20,7 +20,6 @@ from app.schemas.project import (
 from app.schemas.response_model import create_response
 from app.repositories import project_repository
 
-
 router = APIRouter()
 
 
@@ -42,8 +41,9 @@ def create_project_step1(
         raise HTTPException(status_code=403, detail="Only organizations can create projects")
 
     organization_id = current_user.id
-    owner_id = None # No owner at this stage
-    project_lead_id = None # No project lead at this stage
+    owner_id = None  # No owner at this stage
+    project_lead_id = None  # No project lead at this stage
+
     # Create initial project
     new_project = Project(
         name=project_data.name,
@@ -75,9 +75,7 @@ def update_project_pm_tool(
     project_id: int,
     pm_data: PMToolSetup,
     db: Session = Depends(get_db),
-    current_user = Depends(
-
-    )
+    current_user = Depends(get_current_user_or_organization)
 ):
     """
     Step 2: Configure Project Management Tool integration
@@ -87,15 +85,16 @@ def update_project_pm_tool(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # ✅ FIXED: Handle many-to-many relationship
     if isinstance(current_user, User):
-        organization_id = current_user.organization_id
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized to update this project")
     elif isinstance(current_user, Organization):
-        organization_id = current_user.id
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to update this project")
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
-
-    if project.organization_id != organization_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this project")
 
     # Update PM tool settings
     project.pm_tool = pm_data.pm_tool
@@ -129,15 +128,16 @@ def update_project_version_control(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # ✅ FIXED: Handle many-to-many relationship
     if isinstance(current_user, User):
-        organization_id = current_user.organization_id
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized to update this project")
     elif isinstance(current_user, Organization):
-        organization_id = current_user.id
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to update this project")
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
-
-    if project.organization_id != organization_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this project")
 
     # Update VC settings
     project.vc_tool = vc_data.vc_tool
@@ -171,15 +171,16 @@ def update_project_communication_tool(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # ✅ FIXED: Handle many-to-many relationship
     if isinstance(current_user, User):
-        organization_id = current_user.organization_id
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized to update this project")
     elif isinstance(current_user, Organization):
-        organization_id = current_user.id
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to update this project")
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
-
-    if project.organization_id != organization_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this project")
 
     # Update communication tool settings
     project.comm_tool = comm_data.comm_tool
@@ -214,15 +215,16 @@ def add_project_members(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # ✅ FIXED: Handle many-to-many relationship
     if isinstance(current_user, User):
-        organization_id = current_user.organization_id
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized to update this project")
     elif isinstance(current_user, Organization):
-        organization_id = current_user.id
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to update this project")
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
-
-    if project.organization_id != organization_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this project")
 
     # Clear existing members (optional - or check for duplicates)
     db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
@@ -247,7 +249,7 @@ def add_project_members(
 
 
 # ------------------------
-# ALL-IN-ONE ENDPOINT (Optional - for future use)
+# ALL-IN-ONE ENDPOINT (Optional)
 # ------------------------
 
 @router.post("/create")
@@ -260,7 +262,10 @@ def create_complete_project(
     Create a complete project with all steps in one request
     """
     if isinstance(current_user, User):
-        organization_id = current_user.organization_id
+        user_org_ids = [org.id for org in current_user.organizations]
+        if not user_org_ids:
+            raise HTTPException(status_code=403, detail="User not associated with any organization")
+        organization_id = user_org_ids[0]  # Use first organization
         owner_id = current_user.id
     elif isinstance(current_user, Organization):
         organization_id = current_user.id
@@ -304,7 +309,7 @@ def create_complete_project(
     )
 
     db.add(new_project)
-    db.flush()  # Get project ID
+    db.flush()
 
     # Add members
     if project_data.member_ids:
@@ -339,14 +344,14 @@ def get_project(
         raise HTTPException(status_code=404, detail="Project not found")
 
     if isinstance(current_user, User):
-        organization_id = current_user.organization_id
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized to view this project")
     elif isinstance(current_user, Organization):
-        organization_id = current_user.id
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this project")
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
-
-    if project.organization_id != organization_id:
-        raise HTTPException(status_code=403, detail="Not authorized to view this project")
 
     return create_response(
         success=True,
@@ -362,15 +367,16 @@ def list_projects(
 ):
     """List all projects for the current user's organization"""
     if isinstance(current_user, User):
-        organization_id = current_user.organization_id
+        user_org_ids = [org.id for org in current_user.organizations]
+        projects = db.query(Project).filter(
+            Project.organization_id.in_(user_org_ids)
+        ).all()
     elif isinstance(current_user, Organization):
-        organization_id = current_user.id
+        projects = db.query(Project).filter(
+            Project.organization_id == current_user.id
+        ).all()
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
-
-    projects = db.query(Project).filter(
-        Project.organization_id == organization_id
-    ).all()
 
     return create_response(
         success=True,
