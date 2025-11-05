@@ -69,9 +69,16 @@ class UserOut(BaseModel):
     phone_number: Optional[str] = None
     organization_id: Optional[int] = None
     createdAt: datetime.datetime
+    last_seen: Optional[datetime.datetime] = None
 
     class Config:
         from_attributes = True
+
+    @property
+    def is_online(self) -> bool:
+        if self.last_seen:
+            return (datetime.datetime.now(datetime.timezone.utc) - self.last_seen) < datetime.timedelta(minutes=5)
+        return False
 
     @field_serializer('createdAt')
     def serialize_dt(self, dt: datetime.datetime, _info):

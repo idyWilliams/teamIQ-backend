@@ -33,6 +33,7 @@ class User(Base):
     user_skills = relationship("UserSkill", back_populates="user")
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
     updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_seen = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     organizations = relationship("Organization",
                                  secondary="user_organizations",
                                  back_populates="users")

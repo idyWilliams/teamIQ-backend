@@ -24,7 +24,16 @@ class Invitation(Base):
     accepted = Column(Boolean, default=False)
     organization_id = Column(Integer, ForeignKey("organizations.id"))
     is_used = Column(Boolean, default=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
 
     organization = relationship("Organization")
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
     updatedAt = Column(DateTime(timezone=True), onupdate=func.now())
+
+    @property
+    def status(self):
+        if self.accepted and self.is_used:
+            return "accepted"
+        if self.expires_at < datetime.datetime.now(datetime.timezone.utc):
+            return "expired"
+        return "pending"

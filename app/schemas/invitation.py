@@ -24,3 +24,14 @@ class InvitationOut(BaseModel):
 
     # ✅ Pydantic v2 compatible config
     model_config = ConfigDict(from_attributes=True)
+
+
+class InvitationOutWithStatus(InvitationOut):
+    status: str
+    accepted_at: Optional[datetime.datetime] = None
+
+    @property
+    def expires_in(self) -> Optional[datetime.timedelta]:
+        if self.expires_at:
+            return self.expires_at - datetime.datetime.now(datetime.timezone.utc)
+        return None

@@ -6,7 +6,7 @@ from app.schemas.user import UserOut, UserUpdate
 from app.repositories import user_repository
 from app.core.database import get_db
 from app.schemas.response_model import create_response
-from app.core.security import get_current_user_or_organization
+from app.core.dependencies import get_current_user_and_update_last_seen
 
 
 router = APIRouter()
@@ -15,7 +15,7 @@ router = APIRouter()
 @router.get("/organization/users")
 def read_organization_users(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_and_update_last_seen)
 ):
     """
     Get all users for the authenticated organization.
@@ -38,7 +38,7 @@ def read_organization_users(
 def read_organization_user_by_id(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_and_update_last_seen)
 ):
     """
     Allow an authenticated organization to view a specific user's details by ID.
@@ -71,7 +71,7 @@ def read_organization_user_by_id(
 def read_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_and_update_last_seen)
 ):
     """
     Get a specific user's profile by ID.
@@ -110,7 +110,7 @@ def update_profile(
     user_id: int,
     user_update: UserUpdate,  # Use UserUpdate schema instead of dict
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_and_update_last_seen)
 ):
     """
     Update user profile.
@@ -148,7 +148,7 @@ def update_profile(
 def get_user_organizations(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_or_organization)
+    current_user = Depends(get_current_user_and_update_last_seen)
 ):
     user = user_repository.get_user_by_id(db, user_id)
     if not user:

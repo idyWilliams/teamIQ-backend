@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.invitation import InvitationCreate, InvitationOut
+from app.schemas.invitation import InvitationCreate, InvitationOut, InvitationOutWithStatus
 from app.repositories import invitation_repository, user_repository, organization_repository
 from app.core.email_utils import send_invitation_email
 from app.core.security import get_current_user_or_organization
@@ -62,4 +62,26 @@ def create_invitation(
         success=True,
         message=f"Invitation sent to {invitation.email}",
         data=invitation_out
+    )
+
+@router.get("/", response_model=APIResponse, status_code=status.HTTP_200_OK)
+def get_all_invitations(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Get all invitations for the organization.
+    """
+    if not isinstance(current_user, Organization):
+        raise HTTPException(status_code=403, detail="Only organizations can view invitations")
+
+    invitations = invitation_repository.get_all_invitations_for_organization(db, current_user.id)
+    
+    # Use the new schema with status
+    invitations_out = [InvitationOutWithStatus.model_validate(inv) for inv in invitations]
+
+    return create_response(
+        success=True,
+        message="Invitations retrieved successfully",
+        data=invitations_out
     )
