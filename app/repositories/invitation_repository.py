@@ -15,7 +15,9 @@ def create_invitation(db: Session, invitation: InvitationCreate, organization_id
     expires_at = datetime.utcnow() + timedelta(hours=48)
 
     db_invitation = Invitation(
-        **invitation.model_dump(),
+        email=invitation.email,
+        role=invitation.role,
+        track=invitation.track,
         invitation_code=invitation_code,
         organization_id=organization_id,
         expires_at=expires_at,

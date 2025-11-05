@@ -7,14 +7,14 @@ import datetime
 class InvitationCreate(BaseModel):
     email: EmailStr
     role: UserRole
-    stack: Optional[str] = None
+    track: Optional[str] = None
 
 
 class InvitationOut(BaseModel):
     id: int
     email: EmailStr
     role: UserRole
-    stack: Optional[str] = None
+    track: Optional[str] = None
     invitation_code: str
     expires_at: datetime.datetime
     accepted: bool

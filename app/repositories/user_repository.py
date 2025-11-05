@@ -2,7 +2,22 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate
-from app.core.hashing import get_password_hash
+from app.models.stack import Stack
+from app.models.user_stack import UserStack
+
+def update_user_stacks(db: Session, user: User, stack_names: list[str]):
+    # Clear existing stacks for the user
+    db.query(UserStack).filter(UserStack.user_id == user.id).delete()
+
+    for stack_name in stack_names:
+        stack = db.query(Stack).filter(Stack.name == stack_name).first()
+        if not stack:
+            stack = Stack(name=stack_name)
+            db.add(stack)
+            db.flush()  # Flush to get the stack id
+        
+        user_stack = UserStack(user_id=user.id, stack_id=stack.id)
+        db.add(user_stack)
 
 
 def get_user_by_email(db: Session, email: str):

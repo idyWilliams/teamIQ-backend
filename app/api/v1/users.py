@@ -131,6 +131,10 @@ def update_profile(
     # Update only the fields that are provided
     update_data = user_update.dict(exclude_unset=True)
 
+    if 'stacks' in update_data:
+        stack_names = update_data.pop('stacks')
+        user_repository.update_user_stacks(db, db_user, stack_names)
+
     for field, value in update_data.items():
         setattr(db_user, field, value)
 

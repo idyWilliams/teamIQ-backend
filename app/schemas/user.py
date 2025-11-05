@@ -50,6 +50,8 @@ class UserUpdate(BaseModel):
     profile_image: Optional[str] = None
     bio: Optional[str] = None
     phone_number: Optional[str] = None
+    track: str
+    stacks: list[str]
 
 
 # --------------------

@@ -15,7 +15,7 @@ class Invitation(Base):
         SQLEnum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]),
         nullable=False
     )
-    stack = Column(String, nullable=True)
+    track = Column(String, nullable=True)
     invitation_code = Column(String, unique=True, index=True, nullable=False)
     expires_at = Column(
         DateTime(timezone=True),
