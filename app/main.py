@@ -100,7 +100,7 @@ def on_startup():
 @app.get("/", tags=["Health"])
 def root():
     """Root endpoint - Health check"""
-    # ✅ Get scheduler status dynamically on each request
+
     from app.tasks.sync_scheduler import get_scheduler_status
 
     try:
