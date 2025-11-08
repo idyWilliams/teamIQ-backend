@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     SYNC_INTERVAL_MINUTES: int = 15
     SYNC_ENABLED: bool = True
     SYNC_BATCH_SIZE: int = 10
+    ENCRYPTION_KEY: Optional[str] = os.getenv("ENCRYPTION_KEY")
 
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

@@ -9,6 +9,7 @@ from datetime import datetime
 
 from app.api.v1 import (
     auth,
+    chat,
     users,
     organizations,
     projects,
@@ -18,7 +19,9 @@ from app.api.v1 import (
     invitations,
     skills,
     notifications,
-    upload
+    upload,
+    webhooks,
+    ml
 )
 
 # Logger
@@ -155,6 +158,16 @@ app.include_router(invitations.router, prefix="/api/v1/invitations", tags=["Invi
 app.include_router(skills.router, prefix="/api/v1/skills", tags=["Skills"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
+app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["Webhooks"])
+app.include_router(
+    ml.router,
+    prefix="/api/v1/ml",
+    tags=["ML & Predictions"])
+app.include_router(
+    chat.router,
+    prefix="/api/v1/chat",
+    tags=["AI Chat"]
+)
 
 
 # Global error handler

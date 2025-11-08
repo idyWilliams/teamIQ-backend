@@ -11,6 +11,8 @@ from app.models.project import Project, IntegrationMethod
 from app.models.task import Task, TaskStatus
 from app.models.user import User
 from app.models.organization import Organization
+from app.models.contribution import Contribution
+from app.models.activity import Activity
 
 
 class IntegrationError(Exception):
@@ -510,32 +512,89 @@ class VersionControlSync(BaseIntegrationSync):
     def _process_github_commits(self, commits: List[Dict]):
         """Process GitHub commits for contribution metrics"""
         for commit in commits:
-            author_email = commit["commit"]["author"].get("email")
-            if author_email:
+            try:
+                external_id = commit["sha"]
+                # Check if contribution already exists
+                existing_contribution = self.db.query(Contribution).filter(Contribution.external_id == external_id).first()
+                if existing_contribution:
+                    continue
+
+                author_email = commit["commit"]["author"].get("email")
                 user = self.db.query(User).filter(User.email == author_email).first()
                 if user:
-                    # TODO: Update user's contribution metrics in dashboard
-                    pass
+                    new_contribution = Contribution(
+                        user_id=user.id,
+                        project_id=self.project.id,
+                        source="github",
+                        type="commit",
+                        external_id=external_id,
+                        message=commit["commit"]["message"],
+                        timestamp=commit["commit"]["author"]["date"],
+                        url=commit["html_url"]
+                    )
+                    self.db.add(new_contribution)
+            except Exception as e:
+                print(f"⚠️  Error processing GitHub commit: {str(e)}")
+                continue
+        self.db.commit()
 
     def _process_gitlab_commits(self, commits: List[Dict]):
         """Process GitLab commits for contribution metrics"""
         for commit in commits:
-            author_email = commit.get("author_email")
-            if author_email:
+            try:
+                external_id = commit["id"]
+                # Check if contribution already exists
+                existing_contribution = self.db.query(Contribution).filter(Contribution.external_id == external_id).first()
+                if existing_contribution:
+                    continue
+
+                author_email = commit.get("author_email")
                 user = self.db.query(User).filter(User.email == author_email).first()
                 if user:
-                    # TODO: Update user's contribution metrics
-                    pass
+                    new_contribution = Contribution(
+                        user_id=user.id,
+                        project_id=self.project.id,
+                        source="gitlab",
+                        type="commit",
+                        external_id=external_id,
+                        message=commit["message"],
+                        timestamp=commit["authored_date"],
+                        url=commit["web_url"]
+                    )
+                    self.db.add(new_contribution)
+            except Exception as e:
+                print(f"⚠️  Error processing GitLab commit: {str(e)}")
+                continue
+        self.db.commit()
 
     def _process_bitbucket_commits(self, commits: List[Dict]):
         """Process Bitbucket commits for contribution metrics"""
         for commit in commits:
-            author_email = commit["author"]["user"].get("email")
-            if author_email:
+            try:
+                external_id = commit["hash"]
+                # Check if contribution already exists
+                existing_contribution = self.db.query(Contribution).filter(Contribution.external_id == external_id).first()
+                if existing_contribution:
+                    continue
+
+                author_email = commit["author"]["raw"]
                 user = self.db.query(User).filter(User.email == author_email).first()
                 if user:
-                    # TODO: Update user's contribution metrics
-                    pass
+                    new_contribution = Contribution(
+                        user_id=user.id,
+                        project_id=self.project.id,
+                        source="bitbucket",
+                        type="commit",
+                        external_id=external_id,
+                        message=commit["message"],
+                        timestamp=commit["date"],
+                        url=commit["links"]["html"]["href"]
+                    )
+                    self.db.add(new_contribution)
+            except Exception as e:
+                print(f"⚠️  Error processing Bitbucket commit: {str(e)}")
+                continue
+        self.db.commit()
 
 
 # ============================================================================
@@ -602,11 +661,41 @@ class CommunicationSync(BaseIntegrationSync):
                     raise IntegrationError(f"Slack API error: {data.get('error')}")
 
                 messages = data.get("messages", [])
+                self._process_slack_messages(messages)
                 print(f"✅ Fetched {len(messages)} Slack messages for project {self.project.id}")
-                # TODO: Process messages for team activity metrics
 
         except requests.exceptions.RequestException as e:
             raise IntegrationError(f"Failed to connect to Slack: {str(e)}")
+
+    def _process_slack_messages(self, messages: List[Dict]):
+        """Process Slack messages for activity metrics"""
+        for message in messages:
+            try:
+                external_id = message["ts"]
+                # Check if activity already exists
+                existing_activity = self.db.query(Activity).filter(Activity.external_id == external_id).first()
+                if existing_activity:
+                    continue
+
+                user_id = message.get("user")
+                user = self.db.query(User).filter(User.external_id == user_id).first()
+                if user:
+                    new_activity = Activity(
+                        user_id=user.id,
+                        project_id=self.project.id,
+                        source="slack",
+                        type="message",
+                        external_id=external_id,
+                        content=message["text"],
+                        timestamp=datetime.fromtimestamp(float(external_id)),
+                        channel=self.project.comm_channel_id,
+                        url=f"https://{self.organization.name}.slack.com/archives/{self.project.comm_channel_id}/p{external_id.replace('.', '')}"
+                    )
+                    self.db.add(new_activity)
+            except Exception as e:
+                print(f"⚠️  Error processing Slack message: {str(e)}")
+                continue
+        self.db.commit()
 
     def _sync_discord_activity(self):
         """Fetch Discord channel activity"""
@@ -631,10 +720,41 @@ class CommunicationSync(BaseIntegrationSync):
 
             if response.status_code == 200:
                 messages = response.json()
+                self._process_discord_messages(messages)
                 print(f"✅ Fetched {len(messages)} Discord messages for project {self.project.id}")
 
         except requests.exceptions.RequestException as e:
             raise IntegrationError(f"Failed to connect to Discord: {str(e)}")
+
+    def _process_discord_messages(self, messages: List[Dict]):
+        """Process Discord messages for activity metrics"""
+        for message in messages:
+            try:
+                external_id = message["id"]
+                # Check if activity already exists
+                existing_activity = self.db.query(Activity).filter(Activity.external_id == external_id).first()
+                if existing_activity:
+                    continue
+
+                author_id = message["author"]["id"]
+                user = self.db.query(User).filter(User.external_id == author_id).first()
+                if user:
+                    new_activity = Activity(
+                        user_id=user.id,
+                        project_id=self.project.id,
+                        source="discord",
+                        type="message",
+                        external_id=external_id,
+                        content=message["content"],
+                        timestamp=message["timestamp"],
+                        channel=message["channel_id"],
+                        url=f"https://discord.com/channels/{self.project.organization_id}/{message['channel_id']}/{external_id}"
+                    )
+                    self.db.add(new_activity)
+            except Exception as e:
+                print(f"⚠️  Error processing Discord message: {str(e)}")
+                continue
+        self.db.commit()
 
     def _sync_teams_activity(self):
         """Fetch Microsoft Teams activity"""

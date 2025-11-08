@@ -41,13 +41,29 @@ class PMToolSetup(BaseModel):
 
 
 # Step 3: Version Control Setup
+# class VCSetup(BaseModel):
+#     vc_tool: Optional[str] = None
+#     vc_integration_method: Optional[IntegrationMethod] = None
+#     vc_repository_url: Optional[str] = None
+#     vc_api_key: Optional[str] = None
+#     vc_access_token: Optional[str] = None
+
+
 class VCSetup(BaseModel):
-    vc_tool: Optional[str] = None
-    vc_integration_method: Optional[IntegrationMethod] = None
-    vc_repository_url: Optional[str] = None
+    """Step 3: Configure version control"""
+    vc_tool: VCTool
+    vc_integration_method: IntegrationMethod
+    vc_repository_url: str
     vc_api_key: Optional[str] = None
     vc_access_token: Optional[str] = None
+    email: Optional[str] = None
 
+    # ✅ ADD THIS: Webhook secret (optional but recommended)
+    vc_webhook_secret: Optional[str] = Field(
+        None,
+        description="Webhook secret for verifying GitHub/GitLab webhooks",
+        min_length=16
+    )
 
 # Step 4: Communication Tool Setup
 class CommToolSetup(BaseModel):

@@ -16,6 +16,7 @@ passlib = "*"
 argon2-cffi = "*"
 
 [dev-packages]
+alembic = "*"
 
 [requires]
 python_version = "3.13"
