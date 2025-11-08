@@ -1,5 +1,5 @@
-from pydantic import BaseModel, field_validator
-from typing import Optional, List, Dict
+from pydantic import BaseModel, field_validator, Field
+from typing import Optional, List, Dict, Any
 import datetime
 from enum import Enum
 
@@ -17,23 +17,30 @@ class IntegrationMethod(str, Enum):
     WEBHOOK = "webhook"
 
 
+class VCTool(str, Enum):
+    """Version control tools"""
+    GITHUB = "github"
+    GITLAB = "gitlab"
+    BITBUCKET = "bitbucket"
+
+
 # Step 1: Project Details
 class ProjectDetailsCreate(BaseModel):
     name: str
     description: Optional[str] = None
     project_lead_id: Optional[int] = None
-    stacks: Optional[List[str]] = []
+    stacks: List[str] = []
     start_date: Optional[datetime.datetime] = None
     end_date: Optional[datetime.datetime] = None
-    linked_documents: Optional[List[str]] = []
+    linked_documents: List[str] = []
     project_image: Optional[str] = None
     is_visible: bool = True
 
 
 # Step 2: Project Management Tool Setup
 class PMToolSetup(BaseModel):
-    pm_tool: Optional[str] = None
-    pm_integration_method: Optional[IntegrationMethod] = None
+    pm_tool: str  # ✅ Required
+    pm_integration_method: IntegrationMethod  # ✅ Required
     pm_project_id: Optional[str] = None
     pm_api_key: Optional[str] = None
     pm_access_token: Optional[str] = None
@@ -41,43 +48,32 @@ class PMToolSetup(BaseModel):
 
 
 # Step 3: Version Control Setup
-# class VCSetup(BaseModel):
-#     vc_tool: Optional[str] = None
-#     vc_integration_method: Optional[IntegrationMethod] = None
-#     vc_repository_url: Optional[str] = None
-#     vc_api_key: Optional[str] = None
-#     vc_access_token: Optional[str] = None
-
-
 class VCSetup(BaseModel):
     """Step 3: Configure version control"""
-    vc_tool: VCTool
-    vc_integration_method: IntegrationMethod
-    vc_repository_url: str
+    vc_tool: VCTool  # ✅ Required
+    vc_integration_method: IntegrationMethod  # ✅ Required
+    vc_repository_url: str  # ✅ Required
     vc_api_key: Optional[str] = None
     vc_access_token: Optional[str] = None
     email: Optional[str] = None
+    vc_webhook_secret: Optional[str] = Field(None, description="Webhook secret")
 
-    # ✅ ADD THIS: Webhook secret (optional but recommended)
-    vc_webhook_secret: Optional[str] = Field(
-        None,
-        description="Webhook secret for verifying GitHub/GitLab webhooks",
-        min_length=16
-    )
 
 # Step 4: Communication Tool Setup
 class CommToolSetup(BaseModel):
-    comm_tool: Optional[str] = None
-    comm_integration_method: Optional[IntegrationMethod] = None
+    comm_tool: str  # ✅ Required
+    comm_integration_method: IntegrationMethod  # ✅ Required
     comm_channel_id: Optional[str] = None
     comm_api_key: Optional[str] = None
     comm_webhook_url: Optional[str] = None
-    comm_notifications: Optional[Dict[str, bool]] = {
-        "pmt_updates": True,
-        "code_events": True,
-        "sentiment_monitoring": True,
-        "custom_commands": True
-    }
+    comm_notifications: Dict[str, bool] = Field(
+        default_factory=lambda: {
+            "pmt_updates": True,
+            "code_events": True,
+            "sentiment_monitoring": True,
+            "custom_commands": True
+        }
+    )
 
 
 # Step 5: User & Permission Sync
@@ -92,39 +88,39 @@ class UserPermissionSync(BaseModel):
 
 # Complete Project Creation (All Steps)
 class ProjectCreate(BaseModel):
-    # Step 1
+    # Step 1: Required
     name: str
     description: Optional[str] = None
     project_lead_id: Optional[int] = None
-    stacks: Optional[List[str]] = []
+    stacks: List[str] = []
     start_date: Optional[datetime.datetime] = None
     end_date: Optional[datetime.datetime] = None
-    linked_documents: Optional[List[str]] = []
+    linked_documents: List[str] = []
     project_image: Optional[str] = None
     is_visible: bool = True
 
-    # Step 2
-    pm_tool: Optional[str] = None
-    pm_integration_method: Optional[IntegrationMethod] = None
+    # Step 2: Required
+    pm_tool: str
+    pm_integration_method: IntegrationMethod
     pm_project_id: Optional[str] = None
     pm_api_key: Optional[str] = None
 
-    # Step 3
-    vc_tool: Optional[str] = None
-    vc_integration_method: Optional[IntegrationMethod] = None
-    vc_repository_url: Optional[str] = None
+    # Step 3: Required
+    vc_tool: str
+    vc_integration_method: IntegrationMethod
+    vc_repository_url: str
     vc_api_key: Optional[str] = None
 
-    # Step 4
-    comm_tool: Optional[str] = None
-    comm_integration_method: Optional[IntegrationMethod] = None
+    # Step 4: Required
+    comm_tool: str
+    comm_integration_method: IntegrationMethod
     comm_channel_id: Optional[str] = None
     comm_api_key: Optional[str] = None
     comm_webhook_url: Optional[str] = None
     comm_notifications: Optional[Dict[str, bool]] = None
 
     # Step 5
-    member_ids: Optional[List[int]] = []
+    member_ids: List[int] = []
 
 
 # Response Models
@@ -133,8 +129,7 @@ class ProjectMemberResponse(BaseModel):
     user_id: int
     role: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ProjectResponse(BaseModel):
@@ -144,7 +139,7 @@ class ProjectResponse(BaseModel):
     owner_id: Optional[int]
     organization_id: Optional[int]
     project_lead_id: Optional[int]
-    stacks: Optional[List[str]]
+    stacks: List[str]
     start_date: Optional[datetime.datetime]
     end_date: Optional[datetime.datetime]
 
@@ -160,5 +155,4 @@ class ProjectResponse(BaseModel):
     createdAt: datetime.datetime
     updatedAt: datetime.datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

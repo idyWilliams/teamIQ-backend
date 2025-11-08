@@ -3,7 +3,7 @@ Dashboard Response Schemas
 """
 
 from pydantic import BaseModel
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any  # ✅ Added Any
 from datetime import datetime
 
 
@@ -87,14 +87,13 @@ class DashboardResponse(BaseModel):
 
     # Activity data (for charts)
     activity_by_day: List[ActivityBreakdown]
-    top_languages: List[Dict[str, any]]
-    top_projects: List[Dict[str, any]]
+    top_languages: List[Dict[str, Any]]  
+    top_projects: List[Dict[str, Any]]   
 
     # Timestamps
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}  # ✅ Pydantic v2 style
 
 
 # ==============================================================================
@@ -153,7 +152,7 @@ class OrgDashboardResponse(BaseModel):
 
     # Top performers
     top_contributors: List[TopContributor]
-    most_active_projects: List[Dict[str, any]]
+    most_active_projects: List[Dict[str, Any]]
     technology_breakdown: Dict[str, float]
 
     # Trends (for charts)
@@ -163,5 +162,4 @@ class OrgDashboardResponse(BaseModel):
     # Timestamps
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

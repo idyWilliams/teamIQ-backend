@@ -4,12 +4,14 @@ from typing import Optional
 import datetime
 
 from app.core.database import get_db
+from app.models.organization import Organization
 from app.repositories import user_repository, organization_repository
 from app.repositories.invitation_repository import get_invitation_by_code, accept_invitation
 from app.core.hashing import verify_password, get_password_hash
 from app.core.security import (
     create_access_token,
     create_reset_token,
+    get_current_user_or_organization,
     verify_reset_token,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
@@ -101,7 +103,7 @@ def register_user(
     if not existing_user:
         # === NEW USER REGISTRATION ===
 
-     
+
         user_entity = user_repository.create_user(
             db=db,
             user=user
@@ -152,7 +154,8 @@ def register_user(
             access_token=token,
             token_type="bearer",
             user=UserOut.model_validate(user_entity),
-            organization=organization_out
+            # "onboarding_completed": False,
+            organization=organization_out,
         )
     )
 
@@ -266,7 +269,7 @@ async def request_password_reset(request: PasswordResetRequest, background_tasks
     return create_response(
         success=True,
         message="Reset email sent",
-        data={"reset_link": reset_link}
+        # data={"reset_link": reset_link}
     )
 
 
@@ -291,12 +294,43 @@ def confirm_password_reset(confirm: PasswordResetConfirm, db: Session = Depends(
         db.commit()
     except Exception as e:
         db.rollback()
-        # In a real-world app, you'd want to log this error.
-        # from app.core.logger import logger
-        # logger.error(f"Error during password reset confirmation: {e}")
+
         raise HTTPException(
             status_code=500,
             detail="An error occurred while updating the password. Please try again."
         )
 
     return create_response(success=True, message="Password reset successful")
+
+
+
+@router.post("/logout")
+def logout(
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Logout endpoint
+
+    In token-based auth, logout is handled client-side by:
+    1. Removing token from localStorage/cookies
+    2. Optional: Add token to blacklist (implement if needed)
+
+    This endpoint can be used to log the logout event
+    """
+    from datetime import datetime
+
+    user_type = "organization" if isinstance(current_user, Organization) else "user"
+    user_id = current_user.id
+
+    # Log logout event (optional)
+    print(f"[LOGOUT] {user_type.upper()} ID {user_id} logged out at {datetime.utcnow()}")
+
+    return create_response(
+        success=True,
+        message="Logged out successfully. Please remove token from client.",
+        data={
+            "user_type": user_type,
+            "user_id": user_id,
+            "logged_out_at": datetime.utcnow().isoformat()
+        }
+    )

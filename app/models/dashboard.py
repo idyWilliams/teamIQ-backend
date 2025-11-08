@@ -121,3 +121,8 @@ class OrganizationDashboard(Base):
 
     # Relationships
     organization = relationship("Organization")
+
+
+# ✅ ALIASES (NOT indented - at module level)
+DashboardMetrics = UserDashboard
+OrgDashboardMetrics = OrganizationDashboard

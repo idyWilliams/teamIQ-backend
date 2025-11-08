@@ -62,7 +62,7 @@ def create_invitation(
     return create_response(
         success=True,
         message=f"Invitation sent to {invitation.email}",
-        data=invitation_out
+        # data=invitation_out
     )
 
 @router.get("/", response_model=APIResponse, status_code=status.HTTP_200_OK)

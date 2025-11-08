@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Union
@@ -20,6 +21,7 @@ from app.schemas.project import (
 from app.core.encryption import encrypt_field
 from app.schemas.response_model import create_response
 from app.repositories import project_repository
+from app.services.webhook_secret_generator import generate_github_webhook_secret, generate_jira_webhook_secret, generate_slack_signing_secret
 from app.services.webhook_service import get_webhook_service
 from app.tasks.sync_scheduler import sync_single_project, get_scheduler_status
 
@@ -364,17 +366,17 @@ def update_project_pm_tool(
         raise HTTPException(status_code=403, detail="Invalid user type")
 
     # ✅ VALIDATE configuration
-    try:
-        validated = validate_tool_config(
-            "project_management",
-            pm_data.pm_tool.value,
-            pm_data.dict()
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid configuration: {str(e)}"
-        )
+    # try:
+    #     validated = validate_tool_config(
+    #         "project_management",
+    #         pm_data.pm_tool.value,
+    #         pm_data.dict()
+    #     )
+    # except Exception as e:
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail=f"Invalid configuration: {str(e)}"
+    #     )
 
     # Update PM tool settings
     project.pm_tool = pm_data.pm_tool.value
@@ -440,17 +442,17 @@ def update_project_version_control(
         raise HTTPException(status_code=403, detail="Invalid user type")
 
     # ✅ VALIDATE configuration
-    try:
-        validated = validate_tool_config(
-            "version_control",
-            vc_data.vc_tool.value,
-            vc_data.dict()
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid configuration: {str(e)}"
-        )
+    # try:
+    #     validated = validate_tool_config(
+    #         "version_control",
+    #         vc_data.vc_tool.value,
+    #         vc_data.dict()
+    #     )
+    # except Exception as e:
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail=f"Invalid configuration: {str(e)}"
+    #     )
 
     # Update VC settings
     project.vc_tool = vc_data.vc_tool.value
@@ -517,18 +519,18 @@ def update_project_communication_tool(
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
 
-    # ✅ VALIDATE configuration
-    try:
-        validated = validate_tool_config(
-            "communication",
-            comm_data.comm_tool.value,
-            comm_data.dict()
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid configuration: {str(e)}"
-        )
+    # # ✅ VALIDATE configuration
+    # try:
+    #     validated = validate_tool_config(
+    #         "communication",
+    #         comm_data.comm_tool.value,
+    #         comm_data.dict()
+    #     )
+    # except Exception as e:
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail=f"Invalid configuration: {str(e)}"
+    #     )
 
     # Update communication tool settings
     project.comm_tool = comm_data.comm_tool.value
@@ -1315,3 +1317,163 @@ def get_webhook_setup_instructions(
     )
 
         #
+
+@router.put("/{project_id}")
+def update_project(
+    project_id: int,
+    project_update: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Update/Edit an existing project
+
+    Only project owner or organization admin can edit
+    """
+    from app.models.project import Project
+
+    # Get project
+    project = db.query(Project).filter(Project.id == project_id).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Authorization check
+    if isinstance(current_user, User):
+        # User must be project owner
+        if project.owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Only project owner can edit")
+
+    elif isinstance(current_user, Organization):
+        # Organization must own the project
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Project not in your organization")
+
+    # Update fields
+    update_data = project_update.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        if hasattr(project, field):
+            setattr(project, field, value)
+
+    project.updatedAt = datetime.utcnow()
+
+    db.commit()
+    db.refresh(project)
+
+    return create_response(
+        success=True,
+        message="Project updated successfully",
+        data={"project_id": project.id, "name": project.name}
+    )
+
+
+@router.delete("/{project_id}")
+def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Delete a project
+
+    Only organization admin can delete projects
+    This will also delete all associated data (tasks, members, etc.)
+    """
+    from app.models.project import Project, ProjectMember
+    from app.models.task import Task
+
+    # Get project
+    project = db.query(Project).filter(Project.id == project_id).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Authorization: Only organization can delete
+    if not isinstance(current_user, Organization):
+        raise HTTPException(
+            status_code=403,
+            detail="Only organization admins can delete projects"
+        )
+
+    if project.organization_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Project not in your organization")
+
+    # Delete associated data
+    # 1. Delete all project members
+    db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
+
+    # 2. Delete all tasks
+    db.query(Task).filter(Task.project_id == project_id).delete()
+
+    # 3. Delete the project
+    db.delete(project)
+    db.commit()
+
+    return create_response(
+        success=True,
+        message=f"Project '{project.name}' deleted successfully",
+        data={"project_id": project_id}
+    )
+
+
+@router.delete("/{project_id}/members/{user_id}")
+def remove_user_from_project(
+    project_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Remove a user from a project
+
+    Only organization admin or project owner can remove users
+    """
+    from app.models.project import Project, ProjectMember
+
+    # Get project
+    project = db.query(Project).filter(Project.id == project_id).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Authorization check
+    authorized = False
+
+    if isinstance(current_user, Organization):
+        # Organization owns the project
+        if project.organization_id == current_user.id:
+            authorized = True
+
+    elif isinstance(current_user, User):
+        # User is project owner
+        if project.owner_id == current_user.id:
+            authorized = True
+
+    if not authorized:
+        raise HTTPException(
+            status_code=403,
+            detail="Only organization admin or project owner can remove members"
+        )
+
+    # Find and delete membership
+    membership = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == user_id
+    ).first()
+
+    if not membership:
+        raise HTTPException(status_code=404, detail="User not in this project")
+
+    # Get user name for response
+    user = db.query(User).filter(User.id == user_id).first()
+    user_name = f"{user.first_name} {user.last_name}" if user else "User"
+
+    db.delete(membership)
+    db.commit()
+
+    return create_response(
+        success=True,
+        message=f"{user_name} removed from project successfully",
+        data={"user_id": user_id, "project_id": project_id}
+    )

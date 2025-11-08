@@ -49,7 +49,7 @@ class Activity(Base):
     # Details
     title = Column(String, nullable=True)
     content = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)  # Flexible storage for tool-specific data
+    activity_metadata = Column(JSON, nullable=True)  # ✅ FIXED: renamed from 'metadata' to 'activity_metadata'
 
     # External reference
     external_id = Column(String, index=True, nullable=True)

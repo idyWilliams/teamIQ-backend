@@ -6,10 +6,11 @@ Two assistants: General AI + App-Specific AI
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from typing import Optional
 from app.core.database import get_db
 from app.core.security import get_current_user_or_organization
 from app.models.user import User
-from app.services.chat_service import get_general_chat, get_app_chat
+from app.services.chat_service import get_app_chat, get_general_chat
 from app.schemas.response_model import create_response
 
 
@@ -46,7 +47,7 @@ def chat_with_general_ai(
         raise HTTPException(status_code=403, detail="Only users can chat")
 
     chat_service = get_general_chat()
-    response = chat_service.chat(
+    response = chat_service.chat_general(  # ✅ UPDATED METHOD NAME
         user_id=current_user.id,
         message=chat_msg.message,
         session_id=chat_msg.session_id
@@ -69,7 +70,7 @@ def clear_general_chat_history(
         raise HTTPException(status_code=403, detail="Only users can chat")
 
     chat_service = get_general_chat()
-    chat_service.clear_history(current_user.id, session_id)
+    chat_service.clear_history(current_user.id, "general", session_id)  # ✅ ADDED chat_type
 
     return create_response(
         success=True,
@@ -104,7 +105,7 @@ def chat_with_app_ai(
         raise HTTPException(status_code=403, detail="Only users can chat")
 
     chat_service = get_app_chat(db)
-    response = chat_service.chat(
+    response = chat_service.chat_app(
         user_id=current_user.id,
         message=chat_msg.message,
         session_id=chat_msg.session_id
@@ -163,6 +164,3 @@ def get_app_chat_suggestions(
         message="Suggestions generated",
         data={"suggestions": suggestions[:6]}
     )
-
-
-from typing import Optional

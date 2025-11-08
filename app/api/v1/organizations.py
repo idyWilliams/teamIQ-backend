@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.models.user import User
 from app.schemas.organization import (
     OrganizationSignUp,
     OrganizationOut,
@@ -213,3 +214,251 @@ def get_my_organization_profile(
         message="Organization profile retrieved successfully",
         data=OrganizationOut.model_validate(current_user)
     )
+
+
+@router.delete("/members/{user_id}")
+def remove_user_from_organization(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Remove a user from YOUR organization
+
+    This will also remove them from all projects in the organization
+    Only authenticated organization can remove users
+    """
+    from app.models.organization import Organization
+    from app.models.user_organizations import UserOrganization
+    from app.models.project import ProjectMember, Project
+
+    # Authorization: Must be an authenticated organization
+    if not isinstance(current_user, Organization):
+        raise HTTPException(
+            status_code=403,
+            detail="Only organizations can remove members"
+        )
+
+    org_id = current_user.id
+
+    # Find membership
+    membership = db.query(UserOrganization).filter(
+        UserOrganization.organization_id == org_id,
+        UserOrganization.user_id == user_id
+    ).first()
+
+    if not membership:
+        raise HTTPException(status_code=404, detail="User not in your organization")
+
+    # Get user info for response
+    user = db.query(User).filter(User.id == user_id).first()
+    user_name = f"{user.first_name} {user.last_name}" if user else "User"
+
+    # Remove from all organization projects
+    projects_removed = db.query(ProjectMember).filter(
+        ProjectMember.user_id == user_id
+    ).join(Project).filter(
+        Project.organization_id == org_id
+    ).delete(synchronize_session=False)
+
+    # Remove organization membership
+    db.delete(membership)
+    db.commit()
+
+    return create_response(
+        success=True,
+        message=f"{user_name} removed from organization successfully",
+        data={
+            "user_id": user_id,
+            "organization_id": org_id,
+            "organization_name": current_user.name,
+            "projects_removed_from": projects_removed
+        }
+    )
+
+
+@router.patch("/members/{user_id}/role")
+def update_user_role_in_organization(
+    user_id: int,
+    role: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Update a user's role in YOUR organization
+
+    Roles: admin, manager, member
+    Only authenticated organization can update roles
+    """
+    from app.models.user_organizations import UserOrganization
+
+    # Authorization: Must be an authenticated organization
+    if not isinstance(current_user, Organization):
+        raise HTTPException(
+            status_code=403,
+            detail="Only organizations can update member roles"
+        )
+
+    org_id = current_user.id
+
+    # Validate role
+    valid_roles = ["admin", "manager", "member"]
+    if role not in valid_roles:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
+        )
+
+    # Find membership
+    membership = db.query(UserOrganization).filter(
+        UserOrganization.organization_id == org_id,
+        UserOrganization.user_id == user_id
+    ).first()
+
+    if not membership:
+        raise HTTPException(status_code=404, detail="User not in your organization")
+
+    # Update role
+    old_role = membership.role
+    membership.role = role
+    db.commit()
+
+    user = db.query(User).filter(User.id == user_id).first()
+    user_name = f"{user.first_name} {user.last_name}" if user else "User"
+
+    return create_response(
+        success=True,
+        message=f"{user_name}'s role updated from {old_role} to {role}",
+        data={
+            "user_id": user_id,
+            "user_name": user_name,
+            "old_role": old_role,
+            "new_role": role
+        }
+    )
+
+
+@router.get("/members")
+def get_organization_members(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Get all members in YOUR organization
+    """
+    from app.models.user_organizations import UserOrganization
+
+    # Authorization: Must be an authenticated organization
+    if not isinstance(current_user, Organization):
+        raise HTTPException(
+            status_code=403,
+            detail="Only organizations can view members"
+        )
+
+    org_id = current_user.id
+
+    # Get all members
+    memberships = db.query(UserOrganization).filter(
+        UserOrganization.organization_id == org_id
+    ).all()
+
+    members = []
+    for membership in memberships:
+        user = db.query(User).filter(User.id == membership.user_id).first()
+        if user:
+            members.append({
+                "user_id": user.id,
+                "name": f"{user.first_name} {user.last_name}",
+                "email": user.email,
+                "role": membership.role,
+                "joined_at": membership.joined_at.isoformat() if hasattr(membership, 'joined_at') else None,
+                "profile_picture": user.profile_picture_url
+            })
+
+    return create_response(
+        success=True,
+        message=f"Found {len(members)} members",
+        data={
+            "organization_id": org_id,
+            "organization_name": current_user.name,
+            "total_members": len(members),
+            "members": members
+        }
+    )
+
+
+# @router.post("/members/invite")
+# def invite_user_to_organization(
+#     email: str,
+#     role: str = "member",
+#     db: Session = Depends(get_db),
+#     current_user = Depends(get_current_user_or_organization)
+# ):
+#     """
+#     Invite a user to YOUR organization by email
+
+#     Creates an invitation that user can accept
+#     """
+#     from app.models.invitation import Invitation
+#     import secrets
+
+#     # Authorization: Must be an authenticated organization
+#     if not isinstance(current_user, Organization):
+#         raise HTTPException(
+#             status_code=403,
+#             detail="Only organizations can invite users"
+#         )
+
+#     org_id = current_user.id
+
+#     # Validate role
+#     valid_roles = ["admin", "manager", "member"]
+#     if role not in valid_roles:
+#         raise HTTPException(
+#             status_code=400,
+#             detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
+#         )
+
+#     # Check if user already exists
+#     existing_user = db.query(User).filter(User.email == email).first()
+
+#     if existing_user:
+#         # Check if already a member
+#         from app.models.user_organizations import UserOrganization
+#         existing_membership = db.query(UserOrganization).filter(
+#             UserOrganization.organization_id == org_id,
+#             UserOrganization.user_id == existing_user.id
+#         ).first()
+
+#         if existing_membership:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="User is already a member of your organization"
+#             )
+
+#     # Create invitation
+#     invitation_token = secrets.token_urlsafe(32)
+
+#     invitation = Invitation(
+#         email=email,
+#         organization_id=org_id,
+#         role=role,
+#         token=invitation_token,
+#         expires_at=datetime.utcnow() + timedelta(days=7)  # Valid for 7 days
+#     )
+
+#     db.add(invitation)
+#     db.commit()
+#     db.refresh(invitation)
+
+#     return create_response(
+#         success=True,
+#         message=f"Invitation sent to {email}",
+#         data={
+#             "invitation_id": invitation.id,
+#             "email": email,
+#             "role": role,
+#             "invitation_link": f"/accept-invitation?token={invitation_token}",
+#             "expires_at": invitation.expires_at.isoformat()
+#         }
+#     )

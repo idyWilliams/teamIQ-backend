@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, JSON
 from sqlalchemy.types import Enum as SQLEnum
 from app.core.database import Base
 from enum import Enum as PyEnum
@@ -42,3 +42,7 @@ class Organization(Base):
     projects = relationship("Project", back_populates="organization")
 
     integrations = relationship("OrganizationIntegration", back_populates="organization")
+    dashboard = relationship("OrganizationDashboard", back_populates="organization", uselist=False)
+    onboarding_completed = Column(Boolean, default=False)
+    onboarding_step = Column(Integer, default=0) 
+    onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)
