@@ -97,6 +97,12 @@ def get_user_by_id(db: Session, user_id: int):
     return db.query(User).filter(User.id == user_id).first()
 
 
+def get_projects_for_user(db: Session, user_id: int):
+    """Get all projects a user is a member of"""
+    from app.models.project import Project
+    return db.query(Project).join(Project.members).filter(User.id == user_id).all()
+
+
 def update_user(db: Session, user_id: int, update_data: dict):
     """Update user details"""
     user = get_user_by_id(db, user_id)

@@ -38,6 +38,11 @@ def get_invitation_by_code(db: Session, invitation_code: str):
     return db.query(Invitation).filter(Invitation.invitation_code == invitation_code).first()
 
 
+def get_invitation_by_id(db: Session, invitation_id: int):
+    """Fetch an invitation by its primary key ID"""
+    return db.query(Invitation).filter(Invitation.id == invitation_id).first()
+
+
 def get_all_invitations_for_organization(db: Session, organization_id: int):
     """Fetch all invitations for an organization"""
     return db.query(Invitation).filter(Invitation.organization_id == organization_id).all()

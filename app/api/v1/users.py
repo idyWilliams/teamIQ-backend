@@ -8,9 +8,30 @@ from app.repositories import user_repository
 from app.core.database import get_db
 from app.schemas.response_model import create_response
 from app.core.dependencies import get_current_user_and_update_last_seen
+from app.schemas.project import ProjectResponse
+from typing import List
 
 
 router = APIRouter()
+
+
+@router.get("/me/projects", response_model=APIResponse[List[ProjectResponse]])
+def get_my_projects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_and_update_last_seen)
+):
+    """
+    Get all projects the current user is a member of.
+    """
+    if not isinstance(current_user, User):
+        raise HTTPException(status_code=403, detail="This endpoint is for users only.")
+
+    projects = user_repository.get_projects_for_user(db, user_id=current_user.id)
+    return create_response(
+        success=True,
+        message="Projects retrieved successfully",
+        data=[ProjectResponse.model_validate(p) for p in projects]
+    )
 
 
 @router.get("/organization/users")

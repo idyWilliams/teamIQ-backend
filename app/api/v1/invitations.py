@@ -8,6 +8,8 @@ from app.core.security import get_current_user_or_organization
 from app.schemas.response_model import create_response, APIResponse
 from app.models.organization import Organization
 import logging
+from datetime import datetime, timedelta
+import uuid
 
 router = APIRouter()
 logger = logging.getLogger("invitations")
@@ -84,4 +86,78 @@ def get_all_invitations(
         success=True,
         message="Invitations retrieved successfully",
         data=invitations_out
+    )
+
+
+@router.post("/{invitation_id}/revoke", response_model=APIResponse, status_code=status.HTTP_200_OK)
+def revoke_invitation(
+    invitation_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Revoke a pending invitation.
+    """
+    if not isinstance(current_user, Organization):
+        raise HTTPException(status_code=403, detail="Only organizations can revoke invitations")
+
+    invitation = invitation_repository.get_invitation_by_id(db, invitation_id)
+
+    if not invitation or invitation.organization_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Invitation not found or you do not have permission to revoke it")
+
+    if invitation.is_used:
+        raise HTTPException(status_code=400, detail="This invitation has already been used and cannot be revoked.")
+
+    if invitation.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="This invitation has already expired.")
+
+    # Mark as revoked
+    invitation.is_used = True 
+    invitation.status = "revoked"
+    db.commit()
+
+    return create_response(
+        success=True,
+        message="Invitation has been successfully revoked."
+    )
+
+
+@router.post("/{invitation_id}/resend", response_model=APIResponse, status_code=status.HTTP_200_OK)
+def resend_invitation(
+    invitation_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Resend an invitation that has not been accepted yet.
+    """
+    if not isinstance(current_user, Organization):
+        raise HTTPException(status_code=403, detail="Only organizations can resend invitations")
+
+    invitation = invitation_repository.get_invitation_by_id(db, invitation_id)
+
+    if not invitation or invitation.organization_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Invitation not found or you do not have permission to resend it")
+
+    if invitation.is_used:
+        raise HTTPException(status_code=400, detail="This invitation has already been accepted and cannot be resent.")
+
+    # Generate a new code and expiry date
+    invitation.invitation_code = str(uuid.uuid4())
+    invitation.expires_at = datetime.utcnow() + timedelta(hours=48)
+    invitation.status = "pending" # Reset status in case it was expired
+    db.commit()
+    db.refresh(invitation)
+
+    # Resend the email
+    invite_link = f"https://team-iq-frontend.vercel.app/signup?invitation_code={invitation.invitation_code}&email={invitation.email}"
+    background_tasks.add_task(send_invitation_email, invitation.email, invite_link)
+
+    logger.info(f"Invitation resent to {invitation.email} (OrgID={current_user.id})")
+
+    return create_response(
+        success=True,
+        message=f"Invitation successfully resent to {invitation.email}."
     )

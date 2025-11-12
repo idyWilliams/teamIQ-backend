@@ -21,8 +21,46 @@ from app.schemas.response_model import create_response
 from app.services.webhook_secret_generator import generate_github_webhook_secret, generate_jira_webhook_secret, generate_slack_signing_secret
 from app.services.webhook_service import get_webhook_service
 from app.tasks.sync_scheduler import sync_single_project, get_scheduler_status
+from app.repositories import project_repository
+from app.schemas.user import UserOut
+from typing import List
 
 router = APIRouter()
+
+
+# ------------------------
+# NEW ENDPOINTS
+# ------------------------
+
+@router.get("/{project_id}/users", response_model=APIResponse[List[UserOut]])
+def get_project_users(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """Get all users assigned to a specific project."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Authorization check
+    if isinstance(current_user, User):
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized to view this project")
+    elif isinstance(current_user, Organization):
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this project")
+    else:
+        raise HTTPException(status_code=403, detail="Invalid user type")
+
+    users = project_repository.get_users_for_project(db, project_id=project_id)
+    return create_response(
+        success=True,
+        message="Project users retrieved successfully",
+        data=[UserOut.model_validate(user) for user in users]
+    )
 
 
 # ------------------------
