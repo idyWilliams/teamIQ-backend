@@ -6,7 +6,9 @@ from app.models.organization import Organization, UserRole
 from app.schemas.user import UserOut, UserUpdate
 from app.repositories import user_repository
 from app.core.database import get_db
-from app.schemas.response_model import create_response
+# from app.schemas.response_model import create_response
+from app.schemas.response_model import create_response, APIResponse
+
 from app.core.dependencies import get_current_user_and_update_last_seen
 from app.schemas.project import ProjectResponse
 from typing import List
