@@ -17,7 +17,7 @@ from app.schemas.project import (
     ProjectResponse
 )
 from app.core.encryption import encrypt_field
-from app.schemas.response_model import create_response
+from app.schemas.response_model import create_response, APIResponse
 from app.services.webhook_secret_generator import generate_github_webhook_secret, generate_jira_webhook_secret, generate_slack_signing_secret
 from app.services.webhook_service import get_webhook_service
 from app.tasks.sync_scheduler import sync_single_project, get_scheduler_status
