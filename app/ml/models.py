@@ -150,9 +150,9 @@ class TaskAssignmentPredictor:
         if confidence >= 75:
             return f"Strong match: High completion rate ({user_data.get('completion_rate', 0):.0f}%), relevant skills, and manageable workload."
         elif confidence >= 50:
-            return f"Moderate match: Decent skills and availability, but may need support."
+            return "Moderate match: Decent skills and availability, but may need support."
         else:
-            return f"Weak match: Consider assigning to someone with better skill match or lower workload."
+            return "Weak match: Consider assigning to someone with better skill match or lower workload."
 
     def save(self, filepath: str = "ml/task_assignment_model.pkl"):
         """Save trained model to disk"""
@@ -299,7 +299,7 @@ class UserPerformancePredictor:
             if keyword.lower() not in user_skills_lower:
                 gaps.append({
                     "skill": keyword,
-                    "reason": f"Required for tasks but not in profile",
+                    "reason": "Required for tasks but not in profile",
                     "priority": "high",
                     "learning_resources": self._get_learning_resources(keyword)
                 })

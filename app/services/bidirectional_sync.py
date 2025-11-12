@@ -11,7 +11,6 @@ import requests
 from datetime import datetime
 from app.models.project import Project, IntegrationMethod
 from app.models.task import Task, TaskStatus, TaskHistory
-from app.models.activity import Activity, ActivityType
 from app.models.user import User
 
 

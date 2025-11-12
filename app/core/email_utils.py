@@ -6,7 +6,7 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 import logging
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader

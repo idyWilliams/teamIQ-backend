@@ -1,12 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import Optional
 import datetime
 
 from app.core.database import get_db
 from app.models.organization import Organization
 from app.repositories import user_repository, organization_repository
-from app.repositories.invitation_repository import get_invitation_by_code, accept_invitation
+from app.repositories.invitation_repository import get_invitation_by_code
 from app.core.hashing import verify_password, get_password_hash
 from app.core.security import (
     create_access_token,
@@ -21,7 +20,7 @@ from app.schemas.response_model import create_response
 from app.repositories.user_org_repository import link_user_to_org
 # Schemas
 from app.schemas.user import UserCreate, UserOut
-from app.schemas.organization import OrganizationSignUp, OrganizationOut
+from app.schemas.organization import OrganizationOut
 from app.schemas.auth import Token, PasswordResetRequest, PasswordResetConfirm, LoginRequest
 
 router = APIRouter()
@@ -154,7 +153,7 @@ def register_user(
             access_token=token,
             token_type="bearer",
             user=UserOut.model_validate(user_entity),
-            # "onboarding_completed": False,
+            onboarding_completed=False,
             organization=organization_out,
         )
     )
@@ -292,7 +291,7 @@ def confirm_password_reset(confirm: PasswordResetConfirm, db: Session = Depends(
         hashed_pw = get_password_hash(confirm.new_password)
         user_obj.hashed_password = hashed_pw
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
 
         raise HTTPException(

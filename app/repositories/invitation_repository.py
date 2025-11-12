@@ -1,8 +1,6 @@
 from sqlalchemy.orm import Session
 from app.models.invitation import Invitation
 from app.schemas.invitation import InvitationCreate
-from app.models.user import User
-from app.models.user_organizations import UserOrganization
 from datetime import datetime, timedelta
 from fastapi import HTTPException
 from app.core.logger import logger

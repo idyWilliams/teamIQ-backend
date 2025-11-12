@@ -6,7 +6,7 @@ Integrates with AI service for insights
 
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 from app.models.user import User
 from app.models.project import Project
 from app.models.task import Task, TaskStatus

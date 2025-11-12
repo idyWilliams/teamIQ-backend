@@ -2,12 +2,11 @@ from pydantic import BaseModel, EmailStr, field_validator, field_serializer
 from app.models.organization import UserRole
 import datetime
 from typing import Optional, Dict, List, TYPE_CHECKING
-import json
 import re
 
 # ✅ FIX: Import Organization only for type checking
 if TYPE_CHECKING:
-    from app.models.organization import Organization
+    pass
 
 
 # ============================================================================
@@ -80,7 +79,7 @@ class OrganizationUpdate(BaseModel):
         v = v.strip().lower()
         v = v.replace('https://', '').replace('http://', '').rstrip('/')
 
-        if not '.' in v:
+        if '.' not in v:
             raise ValueError(
                 "Invalid domain format. Please provide a valid domain (e.g., yourcompany.com)"
             )
@@ -137,7 +136,7 @@ class OrganizationOnboardingComplete(BaseModel):
         v = v.strip().lower()
         v = v.replace('https://', '').replace('http://', '').rstrip('/')
 
-        if not '.' in v:
+        if '.' not in v:
             raise ValueError("Invalid domain format. Example: yourcompany.com")
 
         return v
@@ -192,7 +191,6 @@ class OrganizationProfileComplete(BaseModel):
     def from_organization(cls, org):  
         """Check which required fields are missing"""
         # Import at runtime to avoid circular dependency
-        from app.models.organization import Organization
 
         required_for_integrations = [
             "domain_link",

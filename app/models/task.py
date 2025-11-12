@@ -3,7 +3,6 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 from sqlalchemy.sql import func
 from enum import Enum as PyEnum
-from datetime import datetime
 
 
 class TaskStatus(PyEnum):

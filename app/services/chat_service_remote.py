@@ -5,7 +5,6 @@ Works on deployed servers, no local setup needed
 
 import requests
 from typing import Dict, Optional
-import json
 from datetime import datetime
 
 
@@ -135,7 +134,7 @@ What specific practice are you curious about?"""
 
         # Default
         else:
-            return f"""I'm here to help! I can assist with:
+            return """I'm here to help! I can assist with:
 
 🔧 Programming and technical questions
 💼 Career advice for developers
@@ -211,7 +210,7 @@ View all tasks in your Dashboard → Tasks section."""
 
 💡 **Tip**: Prioritize these tasks to improve your productivity score!"""
                 else:
-                    response = f"🎉 Great news! You have no overdue tasks. Keep up the good work!"
+                    response = "🎉 Great news! You have no overdue tasks. Keep up the good work!"
 
             elif "today" in message_lower or "this week" in message_lower:
                 week_end = datetime.utcnow() + timedelta(days=7)
@@ -234,7 +233,7 @@ Navigate to: Dashboard → Tasks → Filter by "Due This Week" """
                     response = "You're all caught up! No urgent tasks due this week. 🎯"
 
             else:
-                response = f"""I can help you with tasks! Try asking:
+                response = """I can help you with tasks! Try asking:
 
 • "How many tasks do I have?"
 • "Show me overdue tasks"

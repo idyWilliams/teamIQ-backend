@@ -6,8 +6,6 @@ Represents a single contribution from a version control system (e.g., a commit)
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
-from app.models.user import User
-from app.models.project import Project
 
 class Contribution(Base):
     __tablename__ = "contributions"

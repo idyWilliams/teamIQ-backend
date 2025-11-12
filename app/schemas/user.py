@@ -1,7 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo, field_serializer
 from typing import Optional
 
-from sqlalchemy import Boolean
 from app.models.organization import UserRole
 import datetime
 import re
@@ -74,7 +73,7 @@ class UserOut(BaseModel):
     organization_id: Optional[int] = None
     createdAt: datetime.datetime
     last_seen: Optional[datetime.datetime] = None,
-    # "onboarding_completed": Boolean = False,
+    onboarding_completed: bool = False,
 
     class Config:
         from_attributes = True

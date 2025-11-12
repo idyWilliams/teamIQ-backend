@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from app.models.integration import AuthMethod, IntegrationType
+from app.models.integration import AuthMethod
 
 class IntegrationBase(BaseModel):
     integration_type: str
@@ -26,12 +26,21 @@ class IntegrationCreate(IntegrationBase):
 class IntegrationResponse(IntegrationBase):
     id: int
     organization_id: int
-    setup_by_user_id: Optional[int] = None
-    createdAt: datetime
-    updatedAt: datetime
 
     class Config:
         from_attributes = True
+
+
+class IntegrationTools(BaseModel):
+    pm: list["IntegrationToolDetail"]
+    vc: list["IntegrationToolDetail"]
+    comm: list["IntegrationToolDetail"]
+
+
+class IntegrationToolDetail(BaseModel):
+    name: str
+    auth_methods: list[str]
+
 
 class LinkAccount(BaseModel):
     provider: str

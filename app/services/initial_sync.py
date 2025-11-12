@@ -8,12 +8,11 @@ Performs comprehensive one-time sync after project creation
 """
 
 from sqlalchemy.orm import Session
-from typing import Dict, List
+from typing import Dict
 from datetime import datetime, timedelta
 import requests
 
 from app.models.project import Project, ProjectMember
-from app.models.task import Task, TaskStatus
 from app.models.activity import Activity, CommitActivity, PullRequestActivity
 from app.models.user import User
 from app.services.bidirectional_sync import get_sync_service

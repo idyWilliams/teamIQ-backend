@@ -5,8 +5,6 @@ Uses Fernet (symmetric encryption) from cryptography library
 
 from cryptography.fernet import Fernet
 from app.core.config import settings
-import base64
-import os
 
 
 class EncryptionService:

@@ -1,12 +1,37 @@
 # app/api/v1/integrations.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.core.database import get_db
-from app.models.integration import OrganizationIntegration, AuthMethod
-from app.schemas.integration import IntegrationCreate, IntegrationResponse
+from app.schemas.integration import IntegrationCreate, IntegrationResponse, IntegrationTools
 from app.repositories.integration_repository import integration_repository
+from app.core.database import get_db
+
 
 router = APIRouter()
+
+
+@router.get("/tools", response_model=IntegrationTools)
+def get_integration_tools():
+    """
+    Get a list of all available integration tools and their auth methods.
+    """
+    return {
+        "pm": [
+            {"name": "jira", "auth_methods": ["api_key"]},
+            {"name": "linear", "auth_methods": ["api_key"]},
+            {"name": "clickup", "auth_methods": ["api_key"]}
+        ],
+        "vc": [
+            {"name": "github", "auth_methods": ["oauth2", "api_key"]},
+            {"name": "gitlab", "auth_methods": ["oauth2", "api_key"]},
+            {"name": "bitbucket", "auth_methods": ["oauth2", "api_key"]}
+        ],
+        "comm": [
+            {"name": "slack", "auth_methods": ["api_key", "webhook"]},
+            {"name": "discord", "auth_methods": ["api_key", "webhook"]},
+            {"name": "teams", "auth_methods": ["oauth2"]}
+        ]
+    }
+
 
 @router.post("/", response_model=IntegrationResponse)
 def create_integration(

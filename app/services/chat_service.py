@@ -4,7 +4,7 @@ Dual AI Chat Service
 2. App Assistant - Answers questions about the app using database context
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
 import json
@@ -365,7 +365,7 @@ If you don't have enough data, suggest where the user can find it in the app."""
             else:
                 return self._fallback_response(message, context)
 
-        except Exception as e:
+        except Exception:
             return self._fallback_response(message, context)
 
     def _fallback_response(self, message: str, context: Dict) -> str:
@@ -411,7 +411,7 @@ If you don't have enough data, suggest where the user can find it in the app."""
 What specifically are you looking for?"""
 
         # Default
-        return f"I'm here to help! You can ask me about:\n- Your tasks and assignments\n- Project information\n- Team members\n- How to navigate the app\n- Your performance metrics\n\nWhat would you like to know?"
+        return "I'm here to help! You can ask me about:\n- Your tasks and assignments\n- Project information\n- Team members\n- How to navigate the app\n- Your performance metrics\n\nWhat would you like to know?"
 
 
 # Singleton instances

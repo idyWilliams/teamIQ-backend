@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
+from datetime import datetime
 from app.models.user import User
 from app.models.organization import Organization, UserRole
 from app.schemas.user import UserOut, UserUpdate
@@ -137,6 +138,11 @@ def update_profile(
 
     for field, value in update_data.items():
         setattr(db_user, field, value)
+
+    # Mark onboarding as complete
+    if not db_user.onboarding_completed:
+        db_user.onboarding_completed = True
+        db_user.onboarding_completed_at = datetime.utcnow()
 
     db.commit()
     db.refresh(db_user)

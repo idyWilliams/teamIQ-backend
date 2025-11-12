@@ -4,7 +4,6 @@ Generates unique webhook secrets per project
 """
 
 import secrets
-import hashlib
 
 
 def generate_webhook_secret(length: int = 32) -> str:

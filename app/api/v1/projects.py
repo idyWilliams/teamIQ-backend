@@ -1,7 +1,6 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List, Union
 
 from app.core.database import get_db
 from app.core.security import get_current_organization, get_current_user_or_organization
@@ -15,12 +14,10 @@ from app.schemas.project import (
     CommToolSetup,
     UserPermissionSync,
     ProjectCreate,
-    ProjectResponse,
-    ProjectMemberAdd
+    ProjectResponse
 )
 from app.core.encryption import encrypt_field
 from app.schemas.response_model import create_response
-from app.repositories import project_repository
 from app.services.webhook_secret_generator import generate_github_webhook_secret, generate_jira_webhook_secret, generate_slack_signing_secret
 from app.services.webhook_service import get_webhook_service
 from app.tasks.sync_scheduler import sync_single_project, get_scheduler_status
@@ -931,7 +928,7 @@ def get_webhook_setup_instructions(
         instructions["instructions"].append({
             "tool": "jira",
             "tool_name": "Jira",
-            "webhook_url": f"https://teamiq.com/api/v1/webhooks/jira",
+            "webhook_url": "https://teamiq.com/api/v1/webhooks/jira",
             "title": "Configure Jira Webhook for Real-Time Sync",
             "steps": [
                 {
@@ -955,7 +952,7 @@ def get_webhook_setup_instructions(
                     "fields": {
                         "Name": "TeamIQ Sync",
                         "Status": "Enabled",
-                        "URL": f"https://teamiq.com/api/v1/webhooks/jira",
+                        "URL": "https://teamiq.com/api/v1/webhooks/jira",
                         "Description": f"Syncs project {project.name} with TeamIQ"
                     }
                 },
@@ -990,7 +987,7 @@ def get_webhook_setup_instructions(
         instructions["instructions"].append({
             "tool": "clickup",
             "tool_name": "ClickUp",
-            "webhook_url": f"https://teamiq.com/api/v1/webhooks/clickup",
+            "webhook_url": "https://teamiq.com/api/v1/webhooks/clickup",
             "title": "Configure ClickUp Webhook",
             "steps": [
                 {
@@ -1015,7 +1012,7 @@ def get_webhook_setup_instructions(
                     "description": "Configure webhook",
                     "fields": {
                         "Name": "TeamIQ Sync",
-                        "Endpoint": f"https://teamiq.com/api/v1/webhooks/clickup",
+                        "Endpoint": "https://teamiq.com/api/v1/webhooks/clickup",
                         "Workspace": "Select your workspace"
                     }
                 },
@@ -1046,7 +1043,7 @@ def get_webhook_setup_instructions(
         instructions["instructions"].append({
             "tool": "github",
             "tool_name": "GitHub",
-            "webhook_url": f"https://teamiq.com/api/v1/webhooks/github",
+            "webhook_url": "https://teamiq.com/api/v1/webhooks/github",
             "title": "Configure GitHub Webhook for Real-Time Updates",
             "steps": [
                 {
@@ -1071,7 +1068,7 @@ def get_webhook_setup_instructions(
                     "step": 5,
                     "description": "Configure webhook settings",
                     "fields": {
-                        "Payload URL": f"https://teamiq.com/api/v1/webhooks/github",
+                        "Payload URL": "https://teamiq.com/api/v1/webhooks/github",
                         "Content type": "application/json",
                         # "Secret": f"(Optional) Use: {settings.GITHUB_WEBHOOK_SECRET[:10]}..." if hasattr(settings, 'GITHUB_WEBHOOK_SECRET') else "(Optional - leave empty)"
                     }
@@ -1113,7 +1110,7 @@ def get_webhook_setup_instructions(
         instructions["instructions"].append({
             "tool": "gitlab",
             "tool_name": "GitLab",
-            "webhook_url": f"https://teamiq.com/api/v1/webhooks/gitlab",
+            "webhook_url": "https://teamiq.com/api/v1/webhooks/gitlab",
             "title": "Configure GitLab Webhook",
             "steps": [
                 {
@@ -1129,7 +1126,7 @@ def get_webhook_setup_instructions(
                     "step": 3,
                     "description": "Configure webhook",
                     "fields": {
-                        "URL": f"https://teamiq.com/api/v1/webhooks/gitlab",
+                        "URL": "https://teamiq.com/api/v1/webhooks/gitlab",
                         "Secret token": "(Optional)"
                     }
                 },
@@ -1158,7 +1155,7 @@ def get_webhook_setup_instructions(
         instructions["instructions"].append({
             "tool": "slack",
             "tool_name": "Slack",
-            "webhook_url": f"https://teamiq.com/api/v1/webhooks/slack/events",
+            "webhook_url": "https://teamiq.com/api/v1/webhooks/slack/events",
             "title": "Configure Slack Event Subscriptions",
             "note": "⚠️ Important: You must have already created a Slack App in Step 4",
             "steps": [
@@ -1185,7 +1182,7 @@ def get_webhook_setup_instructions(
                     "step": 5,
                     "description": "Enter Request URL",
                     "fields": {
-                        "Request URL": f"https://teamiq.com/api/v1/webhooks/slack/events"
+                        "Request URL": "https://teamiq.com/api/v1/webhooks/slack/events"
                     },
                     "note": "Slack will verify this URL. You'll see a green checkmark if successful."
                 },
@@ -1225,7 +1222,7 @@ def get_webhook_setup_instructions(
         instructions["instructions"].append({
             "tool": "discord",
             "tool_name": "Discord",
-            "webhook_url": f"https://teamiq.com/api/v1/webhooks/discord",
+            "webhook_url": "https://teamiq.com/api/v1/webhooks/discord",
             "title": "Configure Discord Webhook",
             "note": "Discord bot must be added to server (completed in Step 4)",
             "steps": [
@@ -1237,7 +1234,7 @@ def get_webhook_setup_instructions(
                 {
                     "step": 2,
                     "description": "Test the integration",
-                    "test": f"Send a message in your Discord channel. It should appear in TeamIQ within seconds."
+                    "test": "Send a message in your Discord channel. It should appear in TeamIQ within seconds."
                 }
             ],
             "alternative": {
@@ -1267,7 +1264,7 @@ def get_webhook_setup_instructions(
         instructions["instructions"].append({
             "tool": "teams",
             "tool_name": "Microsoft Teams",
-            "webhook_url": f"https://teamiq.com/api/v1/webhooks/teams",
+            "webhook_url": "https://teamiq.com/api/v1/webhooks/teams",
             "title": "Configure Microsoft Teams Webhook",
             "note": "Azure AD app must be registered (completed in Step 4)",
             "steps": [

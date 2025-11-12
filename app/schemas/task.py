@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import datetime
 from app.models.task import TaskStatus, TaskPriority
 from typing import Optional, List

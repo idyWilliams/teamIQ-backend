@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.webhook import WebhookStatus
 from app.models.project import Project
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict
 
 
 class WebhookPersistenceService:

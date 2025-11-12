@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status
-from typing import Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -10,8 +10,7 @@ from app.core.config import settings
 
 
 if TYPE_CHECKING:
-    from app.models.user import User
-    from app.models.organization import Organization
+    pass
 
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
@@ -51,8 +50,6 @@ def get_current_user_or_organization(
 ):
     """Returns either User or Organization based on token"""
 
-    from app.models.user import User
-    from app.models.organization import Organization
 
     token = credentials.credentials
     credentials_exception = HTTPException(

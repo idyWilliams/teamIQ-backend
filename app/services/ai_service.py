@@ -3,7 +3,7 @@ AI Service for Generating Insights and Predictions
 Uses OpenAI GPT or Anthropic Claude for analysis
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 import openai
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session

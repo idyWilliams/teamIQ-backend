@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
+from datetime import datetime
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.organization import (
@@ -114,6 +115,10 @@ async def onboarding_complete(
     update_data = org_data.dict(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_org, key, value)
+
+    # Mark onboarding as complete
+    db_org.onboarding_completed = True
+    db_org.onboarding_completed_at = datetime.utcnow()
 
     db.commit()
     db.refresh(db_org)
