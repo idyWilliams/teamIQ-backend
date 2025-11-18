@@ -1,17 +1,16 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+# models/org_integration_credential.py
+from sqlalchemy import Column, Integer, String, DateTime
 from app.core.database import Base
 from datetime import datetime
 
-class IntegrationConnection(Base):
-    __tablename__ = "integration_connections"
+class OrgIntegrationCredential(Base):
+    __tablename__ = "org_integration_credentials"
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(String, index=True)
     provider = Column(String, index=True)
-    account_id = Column(String, index=True)
-    access_token = Column(String, nullable=True)
-    refresh_token = Column(String, nullable=True)
+    client_id = Column(String, nullable=True)
+    client_secret = Column(String, nullable=True)
     api_key = Column(String, nullable=True)
-    connected_by_user_id = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    is_active = Column(Boolean, default=True)
+

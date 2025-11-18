@@ -7,7 +7,7 @@ from .skill import Skill, UserSkill
 from .invitation import Invitation
 from .notification import Notification
 from .dashboard import UserDashboard, OrganizationDashboard, DashboardMetrics, OrgDashboardMetrics
-from .integration import OrganizationIntegration, LinkedAccount
+# from .integration import OrganizationIntegration, LinkedAccount
 from .stack import Stack
 from .user_stack import UserStack
 from .user_organizations import UserOrganization
@@ -29,8 +29,8 @@ __all__ = [
     "OrganizationDashboard",
     "DashboardMetrics",
     "OrgDashboardMetrics",
-    "OrganizationIntegration",
-    "LinkedAccount",
+    # "OrganizationIntegration",
+    # "LinkedAccount",
     "Stack",
     "UserStack",
     "UserOrganization",
