@@ -110,263 +110,6 @@ def create_project_step1(
     )
 
 
-# @router.patch("/{project_id}/step2-pm-tool")
-# def update_project_pm_tool(
-#     project_id: int,
-#     pm_data: PMToolSetup,
-#     db: Session = Depends(get_db),
-#     current_user = Depends(get_current_user_or_organization)
-# ):
-#     """
-#     Step 2: Configure Project Management Tool integration
-#     """
-#     project = db.query(Project).filter(Project.id == project_id).first()
-
-#     if not project:
-#         raise HTTPException(status_code=404, detail="Project not found")
-
-
-#     if isinstance(current_user, User):
-#         user_org_ids = [org.id for org in current_user.organizations]
-#         if project.organization_id not in user_org_ids:
-#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
-#     elif isinstance(current_user, Organization):
-#         if project.organization_id != current_user.id:
-#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
-#     else:
-#         raise HTTPException(status_code=403, detail="Invalid user type")
-
-#     # Update PM tool settings
-#     # project.pm_tool = pm_data.pm_tool
-#     # project.pm_integration_method = pm_data.pm_integration_method
-#     # project.pm_project_id = pm_data.pm_project_id
-#     # project.pm_api_key = pm_data.pm_api_key
-#     # project.pm_access_token = pm_data.pm_access_token
-#     # project.pm_workspace_url = pm_data.pm_workspace_url
-
-#     # db.commit()
-#     # db.refresh(project)
-
-#     # return create_response(
-#     #     success=True,
-#     #     message="Project management tool configured successfully",
-#     #     data=ProjectResponse.model_validate(project)
-#     # )
-#     project.pm_tool = pm_data.pm_tool
-#     project.pm_integration_method = pm_data.pm_integration_method
-#     project.pm_project_id = pm_data.pm_project_id
-#     project.pm_workspace_url = pm_data.pm_workspace_url
-
-#     # ENCRYPT API key
-#     if pm_data.pm_api_key:
-#         project.pm_api_key = encrypt_field(pm_data.pm_api_key)
-
-#     # For Jira, store email for Basic Auth
-#     if pm_data.pm_tool == "jira" and pm_data.email:
-#         project.pm_email = encrypt_field(pm_data.email)
-
-#     db.commit()
-#     db.refresh(project)
-
-#     return create_response(
-#         success=True,
-#         message="Jira configured successfully",
-#         data=ProjectResponse.model_validate(project)
-#     )
-
-# @router.patch("/{project_id}/step3-version-control")
-# def update_project_version_control(
-#     project_id: int,
-#     vc_data: VCSetup,
-#     db: Session = Depends(get_db),
-#     current_user = Depends(get_current_user_or_organization)
-# ):
-#     """
-#     Step 3: Configure Version Control integration
-#     """
-#     project = db.query(Project).filter(Project.id == project_id).first()
-
-#     if not project:
-#         raise HTTPException(status_code=404, detail="Project not found")
-
-
-#     if isinstance(current_user, User):
-#         user_org_ids = [org.id for org in current_user.organizations]
-#         if project.organization_id not in user_org_ids:
-#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
-#     elif isinstance(current_user, Organization):
-#         if project.organization_id != current_user.id:
-#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
-#     else:
-#         raise HTTPException(status_code=403, detail="Invalid user type")
-
-#     # Update VC settings
-#     project.vc_tool = vc_data.vc_tool
-#     project.vc_integration_method = vc_data.vc_integration_method
-#     project.vc_repository_url = vc_data.vc_repository_url
-#     project.vc_api_key = vc_data.vc_api_key
-#     project.vc_access_token = vc_data.vc_access_token
-
-#     db.commit()
-#     db.refresh(project)
-
-#     return create_response(
-#         success=True,
-#         message="Version control configured successfully",
-#         data=ProjectResponse.model_validate(project)
-#     )
-
-
-# @router.patch("/{project_id}/step4-communication-tool")
-# def update_project_communication_tool(
-#     project_id: int,
-#     comm_data: CommToolSetup,
-#     db: Session = Depends(get_db),
-#     current_user = Depends(get_current_user_or_organization)
-# ):
-#     """
-#     Step 4: Configure Communication Tool integration
-#     """
-#     project = db.query(Project).filter(Project.id == project_id).first()
-
-#     if not project:
-#         raise HTTPException(status_code=404, detail="Project not found")
-
-
-#     if isinstance(current_user, User):
-#         user_org_ids = [org.id for org in current_user.organizations]
-#         if project.organization_id not in user_org_ids:
-#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
-#     elif isinstance(current_user, Organization):
-#         if project.organization_id != current_user.id:
-#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
-#     else:
-#         raise HTTPException(status_code=403, detail="Invalid user type")
-
-#     # Update communication tool settings
-#     project.comm_tool = comm_data.comm_tool
-#     project.comm_integration_method = comm_data.comm_integration_method
-#     project.comm_channel_id = comm_data.comm_channel_id
-#     project.comm_api_key = comm_data.comm_api_key
-#     project.comm_webhook_url = comm_data.comm_webhook_url
-#     project.comm_notifications = comm_data.comm_notifications
-
-#     db.commit()
-#     db.refresh(project)
-
-#     return create_response(
-#         success=True,
-#         message="Communication tool configured successfully",
-#         data=ProjectResponse.model_validate(project)
-#     )
-
-
-# @router.patch("/{project_id}/step5-add-members")
-# def add_project_members(
-#     project_id: int,
-#     members_data: UserPermissionSync,
-#     db: Session = Depends(get_db),
-#     current_user = Depends(get_current_user_or_organization)
-# ):
-#     """
-#     Step 5: Add team members to the project
-#     """
-#     project = db.query(Project).filter(Project.id == project_id).first()
-
-#     if not project:
-#         raise HTTPException(status_code=404, detail="Project not found")
-
-
-#     if isinstance(current_user, User):
-#         user_org_ids = [org.id for org in current_user.organizations]
-#         if project.organization_id not in user_org_ids:
-#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
-#     elif isinstance(current_user, Organization):
-#         if project.organization_id != current_user.id:
-#             raise HTTPException(status_code=403, detail="Not authorized to update this project")
-#     else:
-#         raise HTTPException(status_code=403, detail="Invalid user type")
-
-#     db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
-
-
-#     for member in members_data.members:
-#         project_member = ProjectMember(
-#             project_id=project_id,
-#             user_id=member.user_id,
-#             role=member.role
-#         )
-#         db.add(project_member)
-
-#     db.commit()
-#     db.refresh(project)
-
-#     return create_response(
-#         success=True,
-#         message="Team members added successfully",
-#         data=ProjectResponse.model_validate(project)
-#     )
-
-# @router.patch("/{project_id}/step5-add-members")
-# def add_project_members_and_sync(
-#     project_id: int,
-#     members_data: UserPermissionSync,
-#     background_tasks: BackgroundTasks,
-#     db: Session = Depends(get_db),
-#     current_user = Depends(get_current_user_or_organization)
-# ):
-#     """
-#     Step 5: Add team members to project and trigger initial sync
-#     This pulls all tasks, commits, and activities from external tools
-#     """
-#     project = db.query(Project).filter(Project.id == project_id).first()
-
-#     if not project:
-#         raise HTTPException(status_code=404, detail="Project not found")
-
-#     # Authorization check
-#     if isinstance(current_user, User):
-#         user_org_ids = [org.id for org in current_user.organizations]
-#         if project.organization_id not in user_org_ids:
-#             raise HTTPException(status_code=403, detail="Not authorized")
-#     elif isinstance(current_user, Organization):
-#         if project.organization_id != current_user.id:
-#             raise HTTPException(status_code=403, detail="Not authorized")
-#     else:
-#         raise HTTPException(status_code=403, detail="Invalid user type")
-
-#     # Clear existing members
-#     db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
-
-#     # Add new members
-#     for member in members_data.members:
-#         project_member = ProjectMember(
-#             project_id=project_id,
-#             user_id=member.user_id,
-#             role=member.role
-#         )
-#         db.add(project_member)
-
-#     db.commit()
-#     db.refresh(project)
-
-#     #   INITIAL SYNC IN BACKGROUND
-#     # background_tasks.add_task(perform_initial_project_sync, project_id, db)
-
-#     webhook_service = get_webhook_service(db)
-#     webhook_service.initialize_webhooks_for_project(project_id)
-
-#     # Trigger initial sync
-#     background_tasks.add_task(perform_initial_project_sync, project_id, db)
-
-#     return create_response(
-#         success=True,
-#         message="Setup complete! Configure webhooks for real-time sync.",
-#         data={
-#             "project": ProjectResponse.model_validate(project),
-#             "next_step": f"/api/v1/projects/{project_id}/webhook-setup-instructions"
-#         }
-#     )
 
 
 # ==============================================================================
@@ -825,30 +568,51 @@ def get_project(
     )
 
 
+# @router.get("/")
+# def list_projects(
+#     db: Session = Depends(get_db),
+#     current_user = Depends(get_current_user_or_organization)
+# ):
+#     """List all projects for the current user's organization"""
+#     if isinstance(current_user, User):
+#         user_org_ids = [org.id for org in current_user.organizations]
+#         projects = db.query(Project).filter(
+#             Project.organization_id.in_(user_org_ids)
+#         ).all()
+#     elif isinstance(current_user, Organization):
+#         projects = db.query(Project).filter(
+#             Project.organization_id == current_user.id
+#         ).all()
+#     else:
+#         raise HTTPException(status_code=403, detail="Invalid user type")
+
+#     return create_response(
+#         success=True,
+#         message="Projects retrieved successfully",
+#         data=[ProjectResponse.model_validate(p) for p in projects]
+#     )
+
 @router.get("/")
 def list_projects(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_or_organization)
 ):
-    """List all projects for the current user's organization"""
-    if isinstance(current_user, User):
+    # ✅ Use entity_type instead of isinstance
+    entity_type = getattr(current_user, 'entity_type', None)
+
+    if entity_type == "user":
         user_org_ids = [org.id for org in current_user.organizations]
         projects = db.query(Project).filter(
             Project.organization_id.in_(user_org_ids)
         ).all()
-    elif isinstance(current_user, Organization):
+    elif entity_type == "organization":
         projects = db.query(Project).filter(
             Project.organization_id == current_user.id
         ).all()
     else:
-        raise HTTPException(status_code=403, detail="Invalid user type")
+        raise HTTPException(status_code=403, detail=f"Invalid entity type: {entity_type}")
 
-    return create_response(
-        success=True,
-        message="Projects retrieved successfully",
-        data=[ProjectResponse.model_validate(p) for p in projects]
-    )
-
+    return [ProjectResponse.from_orm(project) for project in projects]
 
 
 
