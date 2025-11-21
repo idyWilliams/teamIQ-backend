@@ -597,22 +597,25 @@ def list_projects(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_or_organization)
 ):
-    # ✅ Use entity_type instead of isinstance
-    entity_type = getattr(current_user, 'entity_type', None)
+    # ✅ Use isinstance for robust type checking
+    # entity_type = getattr(current_user, 'entity_type', None)
 
-    if entity_type == "user":
+    print(f"DEBUG: list_projects current_user type: {type(current_user)}")
+
+    if isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         projects = db.query(Project).filter(
             Project.organization_id.in_(user_org_ids)
         ).all()
-    elif entity_type == "organization":
+    elif isinstance(current_user, Organization):
         projects = db.query(Project).filter(
             Project.organization_id == current_user.id
         ).all()
     else:
-        raise HTTPException(status_code=403, detail=f"Invalid entity type: {entity_type}")
+        print(f"ERROR: Invalid user type in list_projects: {type(current_user)}")
+        raise HTTPException(status_code=403, detail=f"Invalid entity type: {type(current_user)}")
 
-    return [ProjectResponse.from_orm(project) for project in projects]
+    return [ProjectResponse.model_validate(project) for project in projects]
 
 
 
