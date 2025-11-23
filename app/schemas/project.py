@@ -86,6 +86,15 @@ class UserPermissionSync(BaseModel):
     members: List[ProjectMemberAdd]
 
 
+# Resource schemas (must be defined before ProjectCreate)
+class ProjectResourceCreate(BaseModel):
+    connectionId: int
+    resourceId: str
+    resourceType: str
+    resourceName: str
+    metadata: Optional[Dict] = None
+
+
 # Complete Project Creation (All Steps)
 class ProjectCreate(BaseModel):
     # Step 1: Required
@@ -126,6 +135,7 @@ class ProjectCreate(BaseModel):
     resources: List[ProjectResourceCreate] = []
 
 
+
 # Response Models
 class ProjectMemberResponse(BaseModel):
     id: int
@@ -159,14 +169,6 @@ class ProjectResponse(BaseModel):
     updatedAt: datetime.datetime
 
     model_config = {"from_attributes": True}
-
-
-class ProjectResourceCreate(BaseModel):
-    connectionId: int
-    resourceId: str
-    resourceType: str
-    resourceName: str
-    metadata: Optional[Dict] = None
 
 
 class ProjectResourceResponse(BaseModel):
