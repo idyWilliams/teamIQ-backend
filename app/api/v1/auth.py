@@ -93,7 +93,7 @@ def register_user(
     invitation.is_used = True
     invitation.accepted = True
     invitation.accepted_at = datetime.datetime.now(datetime.timezone.utc)
-    invitation.status = "accepted"  
+    invitation.status = "accepted"
 
     # Commit transaction
     db.commit()
@@ -130,6 +130,11 @@ def register_user(
 # ----------------------------
 # LOGIN
 # ----------------------------
+@router.options("/login")
+def login_options():
+    """Handle CORS preflight for login endpoint"""
+    return {"status": "ok"}
+
 @router.post("/login")
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     # Normalize email
