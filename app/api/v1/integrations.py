@@ -190,42 +190,65 @@ def oauth_start(provider: str, orgId: str, db: Session = Depends(get_db)):
 
 @router.get("/oauth/callback")
 async def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
-    try:
-        orgId, provider = state.split(":")
-    except Exception:
-        raise HTTPException(400, "Invalid state param structure")
-    creds = resolve_creds(db, orgId, provider)
-    payload = {
-        "client_id": creds["client_id"],
-        "client_secret": creds["client_secret"],
-        "code": code,
-        "redirect_uri": creds["redirect_uri"],
-        "grant_type": "authorization_code"
-    }
-    headers = {"Accept": "application/json"}
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(creds["token_url"], data=payload, headers=headers)
-        if resp.status_code != 200:
-            raise HTTPException(400, f"Failed token exchange: {resp.text}")
-        token_data = resp.json()
-        access_token = token_data.get("access_token")
-        if not access_token:
-            raise HTTPException(400, "No access token returned")
-    account_id = await get_account_id_from_provider(provider, access_token)
-    upsert_integration_connection(
-        db, {
-            "organization_id": orgId,
-            "provider": provider,
-            "account_id": account_id,
-            "access_token": access_token,
-            "refresh_token": token_data.get("refresh_token"),
-            "connected_by_user_id": account_id
-        }
-    )
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3001")
-    # Redirect to frontend callback page which will show success animation
-    frontend_redirect = f"{frontend_url}/auth/callback/{provider}?success=true"
-    return RedirectResponse(frontend_redirect)
+
+    try:
+        try:
+            orgId, provider = state.split(":")
+        except Exception:
+            raise HTTPException(400, "Invalid state param structure")
+
+        creds = resolve_creds(db, orgId, provider)
+        payload = {
+            "client_id": creds["client_id"],
+            "client_secret": creds["client_secret"],
+            "code": code,
+            "redirect_uri": creds["redirect_uri"],
+            "grant_type": "authorization_code"
+        }
+        headers = {"Accept": "application/json"}
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(creds["token_url"], data=payload, headers=headers)
+            print(f"GitHub token exchange response status: {resp.status_code}")
+            print(f"GitHub token exchange response body: {resp.text}")
+
+            if resp.status_code != 200:
+                raise HTTPException(400, f"Failed token exchange: {resp.text}")
+
+            token_data = resp.json()
+            access_token = token_data.get("access_token")
+
+            if not access_token:
+                print(f"Token data received: {token_data}")
+                raise HTTPException(400, f"No access token returned. GitHub response: {token_data}")
+
+        account_id = await get_account_id_from_provider(provider, access_token)
+        upsert_integration_connection(
+            db, {
+                "organization_id": orgId,
+                "provider": provider,
+                "account_id": account_id,
+                "access_token": access_token,
+                "refresh_token": token_data.get("refresh_token"),
+                "connected_by_user_id": account_id
+            }
+        )
+
+        # Success - redirect to frontend callback page
+        frontend_redirect = f"{frontend_url}/auth/callback/{provider}?success=true"
+        return RedirectResponse(frontend_redirect)
+
+    except HTTPException as e:
+        # Handle HTTP exceptions with user-friendly error page
+        print(f"OAuth callback error: {e.detail}")
+        error_redirect = f"{frontend_url}/auth/callback/{provider}?error=true"
+        return RedirectResponse(error_redirect)
+    except Exception as e:
+        # Handle unexpected errors
+        print(f"Unexpected OAuth callback error: {str(e)}")
+        error_redirect = f"{frontend_url}/auth/callback/{provider}?error=true"
+        return RedirectResponse(error_redirect)
 
 @router.post("/save-apikey")
 async def save_apikey(data: dict = Body(...), db: Session = Depends(get_db)):
