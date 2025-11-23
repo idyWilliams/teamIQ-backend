@@ -26,8 +26,9 @@ class IntegrationError(Exception):
 class BaseBidirectionalSync:
     """Base class for bidirectional sync with external tools"""
 
-    def __init__(self, project: Project, db: Session):
-        self.project = project
+    def __init__(self, resource, db: Session):
+        self.resource = resource
+        self.project = resource.project
         self.db = db
 
     def is_configured(self) -> bool:
@@ -55,25 +56,22 @@ class JiraBidirectionalSync(BaseBidirectionalSync):
 
     def is_configured(self) -> bool:
         return bool(
-            self.project.pm_tool == "jira" and
-            self.project.pm_workspace_url and
-            (self.project.pm_api_key or self.project.pm_access_token) and
-            self.project.pm_project_id
+            self.resource.connection.provider == "jira" and
+            self.resource.connection.access_token and
+            self.resource.resource_id
         )
 
     def get_headers(self) -> Dict:
         """Build Jira auth headers"""
-        if self.project.pm_integration_method == IntegrationMethod.OAUTH2:
-            return {"Authorization": f"Bearer {self.project.pm_access_token}"}
-        elif self.project.pm_integration_method == IntegrationMethod.API_KEY:
-            return {"Authorization": f"Bearer {self.project.pm_api_key}"}
-        return {}
+        token = self.resource.connection.access_token
+        return {"Authorization": f"Bearer {token}"}
 
     def get_api_url(self) -> str:
         """Get Jira API base URL"""
-        workspace = self.project.pm_workspace_url.strip()
-        workspace = workspace.replace("https://", "").replace("http://", "")
-        return f"https://{workspace}/rest/api/3"
+        site_id = self.resource.metadata.get("site_id")
+        if not site_id:
+             raise IntegrationError("Missing Jira site ID in resource metadata")
+        return f"https://api.atlassian.com/ex/jira/{site_id}/rest/api/3"
 
     # -------------------------------------------------------------------------
     # PULL: External → TeamIQ
@@ -92,7 +90,7 @@ class JiraBidirectionalSync(BaseBidirectionalSync):
                 f"{api_url}/search",
                 headers=headers,
                 params={
-                    "jql": f"project={self.project.pm_project_id}",
+                    "jql": f"project={self.resource.resource_id}",
                     "maxResults": 100,
                     "fields": "summary,description,status,assignee,duedate,priority,updated,created"
                 },
@@ -146,7 +144,9 @@ class JiraBidirectionalSync(BaseBidirectionalSync):
         task.external_status = fields["status"]["name"]
         task.due_date = fields.get("duedate")
         task.last_synced_at = datetime.utcnow()
-        task.external_url = f"https://{self.project.pm_workspace_url}/browse/{issue_key}"
+        # Construct URL from metadata if available
+        base_url = self.resource.metadata.get("url", "")
+        task.external_url = f"{base_url}/browse/{issue_key}" if base_url else ""
 
         # Map assignee
         assignee = fields.get("assignee")
@@ -223,7 +223,7 @@ class JiraBidirectionalSync(BaseBidirectionalSync):
 
         payload = {
             "fields": {
-                "project": {"key": self.project.pm_project_id},
+                "project": {"key": self.resource.resource_id},
                 "summary": task.title,
                 "description": task.description or "",
                 "issuetype": {"name": "Task"}
@@ -242,7 +242,8 @@ class JiraBidirectionalSync(BaseBidirectionalSync):
                 issue = response.json()
                 task.external_id = issue["id"]
                 task.external_source = "jira"
-                task.external_url = f"https://{self.project.pm_workspace_url}/browse/{issue['key']}"
+                base_url = self.resource.metadata.get("url", "")
+                task.external_url = f"{base_url}/browse/{issue['key']}" if base_url else ""
                 task.last_synced_at = datetime.utcnow()
                 self.db.commit()
                 print(f"✅ Created task in Jira: {issue['key']}")
@@ -301,29 +302,16 @@ class ClickUpBidirectionalSync(BaseBidirectionalSync):
 
     def is_configured(self) -> bool:
         return bool(
-            self.project.pm_tool == "clickup" and
-            self.project.pm_project_id and
-            (self.project.pm_api_key or self.project.pm_access_token)
+            self.resource.connection.provider == "clickup" and
+            self.resource.resource_id and
+            self.resource.connection.api_key
         )
 
    # In bidirectional_sync.py
 
-def get_headers(self) -> Dict:
-    """Build Jira auth headers with decryption"""
-    from app.core.encryption import decrypt_field
-
-    if self.project.pm_integration_method == IntegrationMethod.API_KEY:
-        # Decrypt credentials
-        email = decrypt_field(self.project.pm_email)
-        api_token = decrypt_field(self.project.pm_api_key)
-
-        # Create Basic Auth
-        auth_string = f"{email}:{api_token}"
-        auth_bytes = base64.b64encode(auth_string.encode()).decode()
-
-        return {"Authorization": f"Basic {auth_bytes}"}
-
-    # return {}
+    def get_headers(self) -> Dict:
+        """Build ClickUp auth headers"""
+        return {"Authorization": self.resource.connection.api_key}
 
 
     # -------------------------------------------------------------------------
@@ -336,7 +324,7 @@ def get_headers(self) -> Dict:
 
         try:
             response = requests.get(
-                f"https://api.clickup.com/api/v2/list/{self.project.pm_project_id}/task",
+                f"https://api.clickup.com/api/v2/list/{self.resource.resource_id}/task",
                 headers=headers,
                 params={"include_closed": "true"},
                 timeout=30
@@ -448,7 +436,7 @@ def get_headers(self) -> Dict:
 
         try:
             response = requests.post(
-                f"https://api.clickup.com/api/v2/list/{self.project.pm_project_id}/task",
+                f"https://api.clickup.com/api/v2/list/{self.resource.resource_id}/task",
                 headers=headers,
                 json=payload,
                 timeout=30
@@ -491,15 +479,25 @@ def get_headers(self) -> Dict:
 # SYNC FACTORY
 # ==============================================================================
 
-def get_sync_service(project: Project, db: Session) -> Optional[BaseBidirectionalSync]:
-    """Factory to get appropriate sync service based on project configuration"""
-    if project.pm_tool == "jira":
-        return JiraBidirectionalSync(project, db)
-    elif project.pm_tool == "clickup":
-        return ClickUpBidirectionalSync(project, db)
-    elif project.pm_tool == "linear":
-        # TODO: Implement Linear sync
-        return None
-    return None
+def get_sync_services(project: Project, db: Session) -> List[BaseBidirectionalSync]:
+    """Factory to get all appropriate sync services based on project resources"""
+    services = []
+
+    # Iterate over project resources
+    # We need to make sure resources are loaded.
+    # If project is passed from a query that didn't eager load, this might trigger a lazy load.
+
+    pm_providers = ["jira", "clickup", "linear"]
+
+    for resource in project.resources:
+        if resource.connection.provider in pm_providers:
+            if resource.connection.provider == "jira":
+                services.append(JiraBidirectionalSync(resource, db))
+            elif resource.connection.provider == "clickup":
+                services.append(ClickUpBidirectionalSync(resource, db))
+            # elif resource.connection.provider == "linear":
+            #     services.append(LinearBidirectionalSync(resource, db))
+
+    return services
 
 

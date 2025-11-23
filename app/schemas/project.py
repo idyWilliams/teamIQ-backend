@@ -122,6 +122,9 @@ class ProjectCreate(BaseModel):
     # Step 5
     member_ids: List[int] = []
 
+    # Resources (New)
+    resources: List[ProjectResourceCreate] = []
+
 
 # Response Models
 class ProjectMemberResponse(BaseModel):
@@ -154,5 +157,25 @@ class ProjectResponse(BaseModel):
 
     createdAt: datetime.datetime
     updatedAt: datetime.datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectResourceCreate(BaseModel):
+    connectionId: int
+    resourceId: str
+    resourceType: str
+    resourceName: str
+    metadata: Optional[Dict] = None
+
+
+class ProjectResourceResponse(BaseModel):
+    id: int
+    project_id: int
+    connection_id: int
+    resource_id: str
+    resource_type: str
+    resource_name: str
+    resource_metadata: Optional[Dict] = None
 
     model_config = {"from_attributes": True}

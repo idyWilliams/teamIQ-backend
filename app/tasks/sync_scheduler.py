@@ -26,11 +26,15 @@ def sync_all_projects():
 
     try:
         # Get all projects that have at least one integration configured
-        projects = db.query(Project).filter(
+        # Check both legacy columns and new resources
+        from app.models.project_resource import ProjectResource
+
+        projects = db.query(Project).outerjoin(ProjectResource).filter(
             (Project.pm_tool.isnot(None)) |
             (Project.vc_tool.isnot(None)) |
-            (Project.comm_tool.isnot(None))
-        ).all()
+            (Project.comm_tool.isnot(None)) |
+            (ProjectResource.id.isnot(None))
+        ).distinct().all()
 
         if not projects:
             logger.info("No projects with integrations configured")

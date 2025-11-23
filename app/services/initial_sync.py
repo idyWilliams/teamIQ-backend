@@ -15,7 +15,8 @@ import requests
 from app.models.project import Project, ProjectMember
 from app.models.activity import Activity, CommitActivity, PullRequestActivity
 from app.models.user import User
-from app.services.bidirectional_sync import get_sync_service
+from app.models.user import User
+from app.services.bidirectional_sync import get_sync_services
 
 
 class InitialProjectSync:
@@ -41,17 +42,14 @@ class InitialProjectSync:
         """Sync everything from all integrated tools"""
         print(f"🔄 Starting initial sync for project {self.project_id}")
 
-        # 1. Sync tasks from PM tool
-        if self.project.pm_tool:
-            self._sync_pm_tool_tasks()
+        # 1. Sync tasks from PM tools
+        self._sync_pm_tool_tasks()
 
         # 2. Sync commits and PRs from version control
-        if self.project.vc_tool:
-            self._sync_version_control()
+        self._sync_version_control()
 
-        # 3. Sync messages from communication tool
-        if self.project.comm_tool:
-            self._sync_communication()
+        # 3. Sync messages from communication tools
+        self._sync_communication()
 
         # 4. Map external users to TeamIQ users
         self._map_users()
@@ -63,13 +61,13 @@ class InitialProjectSync:
     # ==========================================================================
 
     def _sync_pm_tool_tasks(self):
-        """Sync all tasks from PM tool"""
+        """Sync all tasks from linked PM tools"""
         try:
-            sync_service = get_sync_service(self.project, self.db)
-            if sync_service:
-                tasks = sync_service.pull_tasks()
-                self.results["tasks_synced"] = len(tasks)
-                print(f"✅ Synced {len(tasks)} tasks from {self.project.pm_tool}")
+            sync_services = get_sync_services(self.project, self.db)
+            for service in sync_services:
+                tasks = service.pull_tasks()
+                self.results["tasks_synced"] += len(tasks)
+                print(f"✅ Synced {len(tasks)} tasks from {service.resource.connection.provider}")
         except Exception as e:
             print(f"❌ Failed to sync PM tool tasks: {str(e)}")
 
@@ -78,18 +76,26 @@ class InitialProjectSync:
     # ==========================================================================
 
     def _sync_version_control(self):
-        """Sync commits and pull requests"""
-        if self.project.vc_tool == "github":
-            self._sync_github()
-        elif self.project.vc_tool == "gitlab":
-            self._sync_gitlab()
-        elif self.project.vc_tool == "bitbucket":
-            self._sync_bitbucket()
+        """Sync commits and pull requests from all linked VC resources"""
+        vc_providers = ["github", "gitlab", "bitbucket"]
 
-    def _sync_github(self):
+        for resource in self.project.resources:
+            if resource.connection.provider in vc_providers:
+                if resource.connection.provider == "github":
+                    self._sync_github(resource)
+                elif resource.connection.provider == "gitlab":
+                    self._sync_gitlab(resource)
+                elif resource.connection.provider == "bitbucket":
+                    self._sync_bitbucket(resource)
+
+    def _sync_github(self, resource):
         """Sync GitHub commits and PRs"""
-        repo_path = self._extract_repo_path(self.project.vc_repository_url)
-        headers = self._get_vc_headers()
+        repo_path = resource.name # "owner/repo"
+        headers = self._get_vc_headers(resource)
+
+        if not headers:
+             print(f"⚠️ Skipping GitHub sync for {repo_path}: No credentials")
+             return
 
         # Sync commits (last 30 days)
         since = (datetime.utcnow() - timedelta(days=30)).isoformat()
@@ -106,8 +112,8 @@ class InitialProjectSync:
             if response.status_code == 200:
                 commits = response.json()
                 for commit in commits:
-                    self._save_commit_activity(commit, "github")
-                self.results["commits_synced"] = len(commits)
+                    self._save_commit_activity(commit, "github", resource)
+                self.results["commits_synced"] += len(commits)
 
             # Get pull requests
             pr_response = requests.get(
@@ -121,14 +127,24 @@ class InitialProjectSync:
                 prs = pr_response.json()
                 for pr in prs:
                     self._save_pr_activity(pr, "github")
-                self.results["pull_requests_synced"] = len(prs)
+                self.results["pull_requests_synced"] += len(prs)
 
-            print(f"✅ Synced GitHub: {self.results['commits_synced']} commits, {self.results['pull_requests_synced']} PRs")
+            print(f"✅ Synced GitHub {repo_path}: {len(commits) if response.status_code==200 else 0} commits")
 
         except Exception as e:
             print(f"❌ Failed to sync GitHub: {str(e)}")
 
-    def _save_commit_activity(self, commit_data: Dict, source: str):
+    def _sync_gitlab(self, resource):
+        """Sync GitLab commits"""
+        # TODO: Implement GitLab sync with resource
+        pass
+
+    def _sync_bitbucket(self, resource):
+        """Sync Bitbucket commits"""
+        # TODO: Implement Bitbucket sync with resource
+        pass
+
+    def _save_commit_activity(self, commit_data: Dict, source: str, resource=None):
         """Save commit to database"""
         author_email = commit_data.get("commit", {}).get("author", {}).get("email")
 
@@ -152,7 +168,7 @@ class InitialProjectSync:
             project_id=self.project.id,
             commit_sha=commit_data["sha"],
             message=commit_data["commit"]["message"],
-            repository=self.project.vc_repository_url,
+            repository=resource.name if resource else "unknown",
             source=source,
             external_url=commit_data.get("html_url"),
             timestamp=datetime.fromisoformat(
@@ -240,18 +256,25 @@ class InitialProjectSync:
     # ==========================================================================
 
     def _sync_communication(self):
-        """Sync messages from communication tools"""
-        if self.project.comm_tool == "slack":
-            self._sync_slack_messages()
-        elif self.project.comm_tool == "discord":
-            self._sync_discord_messages()
+        """Sync messages from linked communication tools"""
+        comm_providers = ["slack", "discord", "teams"]
 
-    def _sync_slack_messages(self):
+        for resource in self.project.resources:
+            if resource.connection.provider in comm_providers:
+                if resource.connection.provider == "slack":
+                    self._sync_slack_messages(resource)
+                elif resource.connection.provider == "discord":
+                    self._sync_discord_messages(resource)
+
+    def _sync_slack_messages(self, resource):
         """Sync Slack channel messages"""
-        if not self.project.comm_channel_id or not self.project.comm_api_key:
+        channel_id = resource.resource_id
+        token = resource.connection.access_token or resource.connection.api_key
+
+        if not token:
             return
 
-        headers = {"Authorization": f"Bearer {self.project.comm_api_key}"}
+        headers = {"Authorization": f"Bearer {token}"}
 
         # Get messages from last 7 days
         oldest = (datetime.utcnow() - timedelta(days=7)).timestamp()
@@ -261,7 +284,7 @@ class InitialProjectSync:
                 "https://slack.com/api/conversations.history",
                 headers=headers,
                 params={
-                    "channel": self.project.comm_channel_id,
+                    "channel": channel_id,
                     "oldest": str(oldest),
                     "limit": 100
                 },
@@ -273,14 +296,14 @@ class InitialProjectSync:
                 if data.get("ok"):
                     messages = data.get("messages", [])
                     for msg in messages:
-                        self._save_slack_message(msg)
-                    self.results["activities_synced"] = len(messages)
-                    print(f"✅ Synced {len(messages)} Slack messages")
+                        self._save_slack_message(msg, channel_id)
+                    self.results["activities_synced"] += len(messages)
+                    print(f"✅ Synced {len(messages)} Slack messages from {resource.resource_name}")
 
         except Exception as e:
             print(f"❌ Failed to sync Slack: {str(e)}")
 
-    def _save_slack_message(self, message: Dict):
+    def _save_slack_message(self, message: Dict, channel_id: str):
         """Save Slack message as activity"""
         user_id_slack = message.get("user")
 
@@ -295,7 +318,7 @@ class InitialProjectSync:
             action="sent",
             content=message.get("text", ""),
             external_id=message.get("ts"),
-            channel_id=self.project.comm_channel_id,
+            channel_id=channel_id,
             timestamp=datetime.fromtimestamp(float(message.get("ts", 0))),
             impact_score=1.0
         )
@@ -332,12 +355,11 @@ class InitialProjectSync:
         """Extract owner/repo from GitHub URL"""
         return repo_url.replace("https://github.com/", "").replace(".git", "")
 
-    def _get_vc_headers(self) -> Dict:
+    def _get_vc_headers(self, resource) -> Dict:
         """Get version control auth headers"""
-        if self.project.vc_access_token:
-            return {"Authorization": f"Bearer {self.project.vc_access_token}"}
-        elif self.project.vc_api_key:
-            return {"Authorization": f"token {self.project.vc_api_key}"}
+        token = resource.connection.access_token or resource.connection.api_key
+        if token:
+            return {"Authorization": f"Bearer {token}"}
         return {}
 
     def _calculate_commit_impact(self, commit: CommitActivity) -> float:

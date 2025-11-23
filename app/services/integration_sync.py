@@ -48,18 +48,13 @@ class PMToolSync(BaseIntegrationSync):
     """Sync for Project Management Tools (Jira, Linear, ClickUp)"""
 
     def is_configured(self) -> bool:
-        """Check if PM tool is configured"""
-        configured = bool(
-            self.project.pm_tool and
-            self.project.pm_integration_method and
-            (self.project.pm_api_key or self.project.pm_access_token)
+        """Check if any PM resources are linked"""
+        # Check if there are any resources associated with PM tools
+        pm_providers = ["jira", "linear", "clickup"]
+        return any(
+            r.connection.provider in pm_providers
+            for r in self.project.resources
         )
-
-        # For Jira, also need workspace URL
-        if self.project.pm_tool == "jira":
-            configured = configured and bool(self.project.pm_workspace_url)
-
-        return configured
 
     def get_headers(self) -> Dict:
         """Build auth headers based on integration method"""
@@ -112,42 +107,49 @@ class PMToolSync(BaseIntegrationSync):
         return None
 
     def sync_tasks(self):
-        """Sync tasks from PM tool to database"""
+        """Sync tasks from all linked PM resources"""
         if not self.is_configured():
-            print(f"⚠️  PM tool not fully configured for project {self.project.id}")
+            print(f"⚠️  No PM resources linked for project {self.project.id}")
             return
 
-        try:
-            if self.project.pm_tool == "jira":
-                self._sync_jira_issues()
-            elif self.project.pm_tool == "linear":
-                self._sync_linear_issues()
-            elif self.project.pm_tool == "clickup":
-                self._sync_clickup_tasks()
+        for resource in self.project.resources:
+            try:
+                provider = resource.connection.provider
+                if provider == "jira":
+                    self._sync_jira_issues(resource)
+                elif provider == "linear":
+                    self._sync_linear_issues(resource)
+                elif provider == "clickup":
+                    self._sync_clickup_tasks(resource)
 
-        except IntegrationError as e:
-            print(f"❌ Integration Error: {str(e)}")
-            self._store_integration_error(str(e))
+            except IntegrationError as e:
+                print(f"❌ Integration Error ({provider}): {str(e)}")
+                self._store_integration_error(str(e))
 
-        except Exception as e:
-            print(f"❌ Unexpected error: {str(e)}")
-            self._store_integration_error(f"Sync failed: {str(e)}")
+            except Exception as e:
+                print(f"❌ Unexpected error ({provider}): {str(e)}")
+                self._store_integration_error(f"Sync failed: {str(e)}")
 
-    def _sync_jira_issues(self):
-        """Fetch and sync Jira issues"""
-        if not self.project.pm_project_id:
-            raise IntegrationError("Jira project key is required (e.g., 'TEAM', 'PROD')")
+    def _sync_jira_issues(self, resource):
+        """Fetch and sync Jira issues for a specific resource"""
+        # resource.resource_id is the Jira Project Key or ID
+        # resource.metadata contains site_id, url, etc.
 
-        api_url = self.get_api_url()
-        headers = self.get_headers()
-        workspace = self.get_jira_workspace_url()
+        token = resource.connection.access_token
+        site_id = resource.metadata.get("site_id")
+
+        if not token or not site_id:
+            raise IntegrationError("Missing Jira credentials or site ID")
+
+        api_url = f"https://api.atlassian.com/ex/jira/{site_id}/rest/api/3"
+        headers = {"Authorization": f"Bearer {token}"}
 
         try:
             response = requests.get(
                 f"{api_url}/search",
                 headers=headers,
                 params={
-                    "jql": f"project={self.project.pm_project_id}",
+                    "jql": f"project={resource.resource_id}", # resource_id is the Project ID/Key
                     "maxResults": 100,
                     "fields": "summary,description,status,assignee,duedate"
                 },
@@ -155,44 +157,35 @@ class PMToolSync(BaseIntegrationSync):
             )
 
             if response.status_code == 401:
-                raise IntegrationError("Jira authentication failed. Check your API key/token.")
-
-            if response.status_code == 400:
-                error_msg = response.json().get("errorMessages", ["Unknown error"])[0]
-                raise IntegrationError(f"Jira request error: {error_msg}")
-
-            if response.status_code == 404:
-                raise IntegrationError(
-                    f"Jira project '{self.project.pm_project_id}' not found on '{workspace}'"
-                )
+                raise IntegrationError("Jira authentication failed.")
 
             if response.status_code != 200:
-                raise IntegrationError(f"Jira API error: {response.status_code}")
+                raise IntegrationError(f"Jira API error: {response.status_code} - {response.text}")
 
             issues = response.json().get("issues", [])
-            self._save_tasks_to_db(issues, "jira", workspace)
-            print(f"✅ Synced {len(issues)} Jira issues for project {self.project.id}")
-
-        except requests.exceptions.Timeout:
-            raise IntegrationError("Jira API request timed out")
-
-        except requests.exceptions.ConnectionError:
-            raise IntegrationError(f"Cannot connect to Jira workspace '{workspace}'")
+            # Pass site_id or constructed URL base for linking
+            # Construct workspace URL from metadata if available, or just use site_id for now
+            workspace_url = resource.metadata.get("url", "")
+            self._save_tasks_to_db(issues, "jira", workspace_url)
+            print(f"✅ Synced {len(issues)} Jira issues from {resource.resource_name}")
 
         except requests.exceptions.RequestException as e:
             raise IntegrationError(f"Failed to connect to Jira: {str(e)}")
 
-    def _sync_linear_issues(self):
+    def _sync_linear_issues(self, resource):
         """Fetch and sync Linear issues"""
-        headers = self.get_headers()
-        headers["Content-Type"] = "application/json"
+        api_key = resource.connection.api_key
+        if not api_key:
+             raise IntegrationError("Missing Linear API key")
 
-        if not self.project.pm_project_id:
-            raise IntegrationError("Linear project ID is required")
+        headers = {"Authorization": api_key, "Content-Type": "application/json"}
+
+        # resource.resource_id should be the Team ID
+        team_id = resource.resource_id
 
         query = """
-        query($projectId: String!) {
-            issues(filter: {project: {id: {eq: $projectId}}}) {
+        query($teamId: String!) {
+            issues(filter: {team: {id: {eq: $teamId}}}) {
                 nodes {
                     id
                     title
@@ -212,44 +205,47 @@ class PMToolSync(BaseIntegrationSync):
                 headers=headers,
                 json={
                     "query": query,
-                    "variables": {"projectId": self.project.pm_project_id}
+                    "variables": {"teamId": team_id}
                 },
                 timeout=30
             )
 
-            if response.status_code == 401:
-                raise IntegrationError("Linear authentication failed. Check your API key.")
+            if response.status_code != 200:
+                raise IntegrationError(f"Linear API error: {response.status_code}")
 
-            if response.status_code == 200:
-                data = response.json()
-                if "errors" in data:
-                    raise IntegrationError(f"Linear API error: {data['errors'][0]['message']}")
+            data = response.json()
+            if "errors" in data:
+                raise IntegrationError(f"Linear API error: {data['errors'][0]['message']}")
 
-                issues = data.get("data", {}).get("issues", {}).get("nodes", [])
-                self._save_tasks_to_db(issues, "linear")
-                print(f"✅ Synced {len(issues)} Linear issues for project {self.project.id}")
+            issues = data.get("data", {}).get("issues", {}).get("nodes", [])
+            self._save_tasks_to_db(issues, "linear")
+            print(f"✅ Synced {len(issues)} Linear issues from {resource.resource_name}")
 
         except requests.exceptions.RequestException as e:
             raise IntegrationError(f"Failed to connect to Linear: {str(e)}")
 
-    def _sync_clickup_tasks(self):
+    def _sync_clickup_tasks(self, resource):
         """Fetch and sync ClickUp tasks"""
-        api_url = self.get_api_url()
-        headers = self.get_headers()
+        api_key = resource.connection.api_key
+        if not api_key:
+            raise IntegrationError("Missing ClickUp API key")
+
+        headers = {"Authorization": api_key}
+        list_id = resource.resource_id
 
         try:
-            response = requests.get(api_url, headers=headers, timeout=30)
+            response = requests.get(
+                f"https://api.clickup.com/api/v2/list/{list_id}/task",
+                headers=headers,
+                timeout=30
+            )
 
-            if response.status_code == 401:
-                raise IntegrationError("ClickUp authentication failed. Check your API key.")
+            if response.status_code != 200:
+                raise IntegrationError(f"ClickUp API error: {response.status_code}")
 
-            if response.status_code == 404:
-                raise IntegrationError(f"ClickUp list '{self.project.pm_project_id}' not found")
-
-            if response.status_code == 200:
-                tasks = response.json().get("tasks", [])
-                self._save_tasks_to_db(tasks, "clickup")
-                print(f"✅ Synced {len(tasks)} ClickUp tasks for project {self.project.id}")
+            tasks = response.json().get("tasks", [])
+            self._save_tasks_to_db(tasks, "clickup")
+            print(f"✅ Synced {len(tasks)} ClickUp tasks from {resource.resource_name}")
 
         except requests.exceptions.RequestException as e:
             raise IntegrationError(f"Failed to connect to ClickUp: {str(e)}")
@@ -354,11 +350,11 @@ class VersionControlSync(BaseIntegrationSync):
     """Sync for Version Control (GitHub, GitLab, Bitbucket)"""
 
     def is_configured(self) -> bool:
-        """Check if VC is configured"""
-        return bool(
-            self.project.vc_tool and
-            self.project.vc_repository_url and
-            (self.project.vc_api_key or self.project.vc_access_token)
+        """Check if any VC resources are linked"""
+        vc_providers = ["github", "gitlab", "bitbucket"]
+        return any(
+            r.connection.provider in vc_providers
+            for r in self.project.resources
         )
 
     def get_headers(self) -> Dict:
@@ -395,34 +391,39 @@ class VersionControlSync(BaseIntegrationSync):
         return None
 
     def sync_commits(self):
-        """Sync recent commits to track contribution metrics"""
+        """Sync recent commits from all linked VC resources"""
         if not self.is_configured():
-            print(f"⚠️  VC not configured for project {self.project.id}")
+            print(f"⚠️  No VC resources linked for project {self.project.id}")
             return
 
-        try:
-            if self.project.vc_tool == "github":
-                self._sync_github_commits()
-            elif self.project.vc_tool == "gitlab":
-                self._sync_gitlab_commits()
-            elif self.project.vc_tool == "bitbucket":
-                self._sync_bitbucket_commits()
+        for resource in self.project.resources:
+            try:
+                provider = resource.connection.provider
+                if provider == "github":
+                    self._sync_github_commits(resource)
+                elif provider == "gitlab":
+                    self._sync_gitlab_commits(resource)
+                elif provider == "bitbucket":
+                    self._sync_bitbucket_commits(resource)
 
-        except IntegrationError as e:
-            print(f"❌ VC Integration Error: {str(e)}")
-            self._store_integration_error(str(e))
+            except IntegrationError as e:
+                print(f"❌ VC Integration Error ({provider}): {str(e)}")
+                self._store_integration_error(str(e))
 
-        except Exception as e:
-            print(f"❌ Unexpected VC error: {str(e)}")
-            self._store_integration_error(f"VC sync failed: {str(e)}")
+            except Exception as e:
+                print(f"❌ Unexpected VC error ({provider}): {str(e)}")
+                self._store_integration_error(f"VC sync failed: {str(e)}")
 
-    def _sync_github_commits(self):
+    def _sync_github_commits(self, resource):
         """Fetch commits from GitHub"""
-        repo_path = self.get_repo_path()
-        if not repo_path:
-            raise IntegrationError("Invalid GitHub repository URL")
+        # resource.name is typically "owner/repo"
+        repo_path = resource.name
+        token = resource.connection.access_token
 
-        headers = self.get_headers()
+        if not token:
+            raise IntegrationError("Missing GitHub access token")
+
+        headers = {"Authorization": f"Bearer {token}"}
         since = datetime.utcnow() - timedelta(days=30)
 
         try:
@@ -434,7 +435,7 @@ class VersionControlSync(BaseIntegrationSync):
             )
 
             if response.status_code == 401:
-                raise IntegrationError("GitHub authentication failed. Check your token.")
+                raise IntegrationError("GitHub authentication failed.")
 
             if response.status_code == 404:
                 raise IntegrationError(f"GitHub repository '{repo_path}' not found")
@@ -442,7 +443,7 @@ class VersionControlSync(BaseIntegrationSync):
             if response.status_code == 200:
                 commits = response.json()
                 self._process_github_commits(commits)
-                print(f"✅ Fetched {len(commits)} GitHub commits for project {self.project.id}")
+                print(f"✅ Fetched {len(commits)} GitHub commits from {repo_path}")
 
         except requests.exceptions.RequestException as e:
             raise IntegrationError(f"Failed to connect to GitHub: {str(e)}")
@@ -605,53 +606,56 @@ class CommunicationSync(BaseIntegrationSync):
     """Sync for Communication Tools (Slack, Discord, Teams)"""
 
     def is_configured(self) -> bool:
-        """Check if comm tool is configured"""
-        return bool(
-            self.project.comm_tool and
-            self.project.comm_integration_method and
-            (self.project.comm_webhook_url or self.project.comm_api_key)
+        """Check if any Comm resources are linked"""
+        comm_providers = ["slack", "discord", "teams"]
+        return any(
+            r.connection.provider in comm_providers
+            for r in self.project.resources
         )
 
     def sync_activity(self):
         """Sync communication activity metrics"""
         if not self.is_configured():
-            print(f"⚠️  Communication tool not configured for project {self.project.id}")
+            print(f"⚠️  No communication resources linked for project {self.project.id}")
             return
 
-        try:
-            if self.project.comm_integration_method == IntegrationMethod.WEBHOOK:
-                print(f"ℹ️  Webhook configured for {self.project.comm_tool}")
-                # Webhooks are passive - they listen for events
-                return
+        for resource in self.project.resources:
+            try:
+                provider = resource.connection.provider
+                if provider == "slack":
+                    self._sync_slack_activity(resource)
+                elif provider == "discord":
+                    self._sync_discord_activity(resource)
+                elif provider == "teams":
+                    self._sync_teams_activity(resource)
 
-            if self.project.comm_integration_method == IntegrationMethod.API_KEY:
-                if self.project.comm_tool == "slack":
-                    self._sync_slack_activity()
-                elif self.project.comm_tool == "discord":
-                    self._sync_discord_activity()
-                elif self.project.comm_tool == "teams":
-                    self._sync_teams_activity()
+            except IntegrationError as e:
+                print(f"❌ Comm Integration Error ({provider}): {str(e)}")
+                self._store_integration_error(str(e))
 
-        except IntegrationError as e:
-            print(f"❌ Comm Integration Error: {str(e)}")
-            self._store_integration_error(str(e))
+            except Exception as e:
+                print(f"❌ Unexpected comm error ({provider}): {str(e)}")
+                self._store_integration_error(f"Comm sync failed: {str(e)}")
 
-        except Exception as e:
-            print(f"❌ Unexpected comm error: {str(e)}")
-            self._store_integration_error(f"Comm sync failed: {str(e)}")
-
-    def _sync_slack_activity(self):
+    def _sync_slack_activity(self, resource):
         """Fetch Slack channel activity"""
-        if not self.project.comm_channel_id:
-            raise IntegrationError("Slack channel ID is required")
+        channel_id = resource.resource_id
+        token = resource.connection.access_token # Slack uses access tokens usually
 
-        headers = {"Authorization": f"Bearer {self.project.comm_api_key}"}
+        if not token:
+             # Fallback to API key if stored there
+             token = resource.connection.api_key
+
+        if not token:
+            raise IntegrationError("Missing Slack credentials")
+
+        headers = {"Authorization": f"Bearer {token}"}
 
         try:
             response = requests.get(
                 "https://slack.com/api/conversations.history",
                 headers=headers,
-                params={"channel": self.project.comm_channel_id, "limit": 100},
+                params={"channel": channel_id, "limit": 100},
                 timeout=30
             )
 
@@ -661,13 +665,13 @@ class CommunicationSync(BaseIntegrationSync):
                     raise IntegrationError(f"Slack API error: {data.get('error')}")
 
                 messages = data.get("messages", [])
-                self._process_slack_messages(messages)
-                print(f"✅ Fetched {len(messages)} Slack messages for project {self.project.id}")
+                self._process_slack_messages(messages, channel_id)
+                print(f"✅ Fetched {len(messages)} Slack messages from {resource.resource_name}")
 
         except requests.exceptions.RequestException as e:
             raise IntegrationError(f"Failed to connect to Slack: {str(e)}")
 
-    def _process_slack_messages(self, messages: List[Dict]):
+    def _process_slack_messages(self, messages: List[Dict], channel_id: str):
         """Process Slack messages for activity metrics"""
         for message in messages:
             try:
@@ -688,8 +692,8 @@ class CommunicationSync(BaseIntegrationSync):
                         external_id=external_id,
                         content=message["text"],
                         timestamp=datetime.fromtimestamp(float(external_id)),
-                        channel=self.project.comm_channel_id,
-                        url=f"https://{self.organization.name}.slack.com/archives/{self.project.comm_channel_id}/p{external_id.replace('.', '')}"
+                        channel=channel_id,
+                        url=f"https://slack.com/archives/{channel_id}/p{external_id.replace('.', '')}"
                     )
                     self.db.add(new_activity)
             except Exception as e:
@@ -783,7 +787,7 @@ def sync_project_integrations(project_id: int, db: Session) -> Dict[str, str]:
     pm_sync = PMToolSync(project, db)
     if pm_sync.is_configured():
         try:
-            print(f"🔄 Syncing PM tool ({project.pm_tool}) for project {project_id}...")
+            print(f"🔄 Syncing PM tools for project {project_id}...")
             pm_sync.sync_tasks()
             results["pm_tool"] = "success"
         except Exception as e:
@@ -795,7 +799,7 @@ def sync_project_integrations(project_id: int, db: Session) -> Dict[str, str]:
     vc_sync = VersionControlSync(project, db)
     if vc_sync.is_configured():
         try:
-            print(f"🔄 Syncing VC ({project.vc_tool}) for project {project_id}...")
+            print(f"🔄 Syncing VC tools for project {project_id}...")
             vc_sync.sync_commits()
             results["version_control"] = "success"
         except Exception as e:

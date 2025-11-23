@@ -14,8 +14,11 @@ from app.schemas.project import (
     CommToolSetup,
     UserPermissionSync,
     ProjectCreate,
-    ProjectResponse
+    ProjectCreate,
+    ProjectResponse,
+    ProjectResourceCreate
 )
+from app.models.project_resource import ProjectResource
 from app.core.encryption import encrypt_field
 from app.schemas.response_model import create_response, APIResponse
 from app.services.webhook_secret_generator import generate_github_webhook_secret, generate_jira_webhook_secret, generate_slack_signing_secret
@@ -408,6 +411,55 @@ def add_project_members_and_sync(
     )
 
 
+@router.post("/{project_id}/resources")
+def link_project_resources(
+    project_id: int,
+    resources: List[ProjectResourceCreate],
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Link multiple external resources (repos, channels, etc.) to a project.
+    Replaces existing resources for the project.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Authorization check
+    if isinstance(current_user, User):
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif isinstance(current_user, Organization):
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Clear existing resources
+    db.query(ProjectResource).filter(ProjectResource.project_id == project_id).delete()
+
+    # Add new resources
+    for res in resources:
+        new_resource = ProjectResource(
+            project_id=project_id,
+            connection_id=res.connectionId,
+            resource_id=res.resourceId,
+            resource_type=res.resourceType,
+            resource_name=res.resourceName,
+            resource_metadata=res.metadata
+        )
+        db.add(new_resource)
+
+    db.commit()
+
+    return create_response(
+        success=True,
+        message=f"Linked {len(resources)} resources to project",
+        data={"count": len(resources)}
+    )
+
+
+
 def perform_initial_project_sync(project_id: int, db: Session):
     """
     Perform initial sync after project creation
@@ -524,6 +576,20 @@ def create_complete_project(
 
     db.commit()
     db.refresh(new_project)
+
+    # Add resources
+    if project_data.resources:
+        for res in project_data.resources:
+            new_resource = ProjectResource(
+                project_id=new_project.id,
+                connection_id=res.connectionId,
+                resource_id=res.resourceId,
+                resource_type=res.resourceType,
+                resource_name=res.resourceName,
+                resource_metadata=res.metadata
+            )
+            db.add(new_resource)
+        db.commit()
 
     # Trigger initial sync
     sync_single_project(new_project.id)
