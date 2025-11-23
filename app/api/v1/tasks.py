@@ -17,8 +17,7 @@ from app.models.task import Task, TaskStatus
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.project import Project
-from app.services.bidirectional_sync import get_sync_service
-
+from app.services.bidirectional_sync import get_sync_services
 
 router = APIRouter()
 
@@ -57,9 +56,10 @@ def create_task(
     if db_task.project_id:
         project = db.query(Project).filter(Project.id == db_task.project_id).first()
         if project and project.pm_tool:
-            sync_service = get_sync_service(project, db)
-            if sync_service:
-                background_tasks.add_task(sync_service.create_external_task, db_task)
+            sync_services = get_sync_services(project, db)
+            if sync_services:
+                # Use the first PM sync service for task creation
+                background_tasks.add_task(sync_services[0].create_external_task, db_task)
 
     return create_response(
         success=True,
@@ -204,9 +204,9 @@ def update_task(
     if task.project_id and task.external_source:
         project = db.query(Project).filter(Project.id == task.project_id).first()
         if project:
-            sync_service = get_sync_service(project, db)
-            if sync_service:
-                background_tasks.add_task(sync_service.push_task_update, updated_task)
+            sync_services = get_sync_services(project, db)
+            if sync_services:
+                background_tasks.add_task(sync_services[0].push_task_update, updated_task)
 
     return create_response(
         success=True,
@@ -271,9 +271,9 @@ def move_task(
     if task.project_id and task.external_source:
         project = db.query(Project).filter(Project.id == task.project_id).first()
         if project:
-            sync_service = get_sync_service(project, db)
-            if sync_service:
-                background_tasks.add_task(sync_service.push_task_update, task)
+            sync_services = get_sync_services(project, db)
+            if sync_services:
+                background_tasks.add_task(sync_services[0].push_task_update, task)
 
     return create_response(
         success=True,
@@ -310,16 +310,16 @@ def pull_tasks_from_external(
             raise HTTPException(status_code=403, detail="Not authorized")
 
     # Get sync service
-    sync_service = get_sync_service(project, db)
+    sync_services = get_sync_services(project, db)
 
-    if not sync_service:
+    if not sync_services:
         raise HTTPException(
             status_code=400,
             detail=f"No sync service available for {project.pm_tool}"
         )
 
     try:
-        synced_tasks = sync_service.pull_tasks()
+        synced_tasks = sync_services[0].pull_tasks()
         return create_response(
             success=True,
             message=f"Successfully synced {len(synced_tasks)} tasks from {project.pm_tool}",
