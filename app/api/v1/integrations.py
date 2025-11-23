@@ -222,7 +222,9 @@ async def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
             "connected_by_user_id": account_id
         }
     )
-    frontend_redirect = f"http://localhost:3000/organization/settings?tab=integrated-apps&connected={provider}"
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3001")
+    # Redirect to frontend callback page which will show success animation
+    frontend_redirect = f"{frontend_url}/auth/callback/{provider}?success=true"
     return RedirectResponse(frontend_redirect)
 
 @router.post("/save-apikey")
