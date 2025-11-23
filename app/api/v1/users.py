@@ -63,13 +63,23 @@ def read_organization_users(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_and_update_last_seen)
 ):
-
+    """
+    Get all users for the authenticated organization.
+    Only accessible by organizations.
+    """
     entity_type = getattr(current_user, 'entity_type', None)
 
     if entity_type != "organization":
         raise HTTPException(status_code=403, detail="Only organizations can access this endpoint")
 
     users = user_repository.get_users_by_organization(db, organization_id=current_user.id)
+    users_out = [UserOut.model_validate(user) for user in users]
+
+    return create_response(
+        success=True,
+        message="Users retrieved successfully",
+        data=[user.model_dump() for user in users_out]
+    )
 
 
 @router.get("/organization/user/{user_id}")
