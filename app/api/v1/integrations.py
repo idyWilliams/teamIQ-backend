@@ -208,10 +208,13 @@ async def get_integration_resources(
 async def get_integration_users(
     connection_id: int,
     provider: str = Query(None),
+    resource_id: str = Query(None),
     db: Session = Depends(get_db)
 ):
     """
     Fetch available users from the connected integration.
+    If resource_id is provided, fetches users from that specific resource (e.g., repo contributors).
+    For GitHub: resource_id should be in format "owner/repo" or just "repo"
     """
     conn = db.query(IntegrationConnection).filter_by(id=connection_id, is_active=True).first()
     if not conn:
@@ -228,7 +231,8 @@ async def get_integration_users(
             provider=conn.provider,
             access_token=conn.access_token,
             account_id=conn.account_id,
-            api_key=conn.api_key
+            api_key=conn.api_key,
+            resource_id=resource_id
         )
         return users
     except Exception as e:
