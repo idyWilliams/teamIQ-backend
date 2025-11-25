@@ -203,6 +203,38 @@ async def get_integration_resources(
         print(f"Error fetching resources for connection {connection_id}: {str(e)}")
         raise HTTPException(500, detail=f"Failed to fetch resources: {str(e)}")
 
+
+@router.get("/{connection_id}/users")
+async def get_integration_users(
+    connection_id: int,
+    provider: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch available users from the connected integration.
+    """
+    conn = db.query(IntegrationConnection).filter_by(id=connection_id, is_active=True).first()
+    if not conn:
+        raise HTTPException(404, detail="Integration not found")
+
+    # Validate provider if supplied
+    if provider and conn.provider != provider:
+        raise HTTPException(400, detail=f"Connection ID {connection_id} belongs to {conn.provider}, not {provider}")
+
+    from app.services.integration_resources import fetch_integration_users
+
+    try:
+        users = await fetch_integration_users(
+            provider=conn.provider,
+            access_token=conn.access_token,
+            account_id=conn.account_id,
+            api_key=conn.api_key
+        )
+        return users
+    except Exception as e:
+        print(f"Error fetching users for connection {connection_id}: {str(e)}")
+        raise HTTPException(500, detail=f"Failed to fetch users: {str(e)}")
+
 # --------- OAuth & Key Flows ---------
 @router.get("/oauth/start")
 def oauth_start(provider: str, orgId: str, db: Session = Depends(get_db)):

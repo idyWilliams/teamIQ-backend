@@ -27,6 +27,33 @@ async def fetch_integration_resources(provider: str, access_token: str, account_
     # Add other providers as needed
     return []
 
+
+async def fetch_integration_users(provider: str, access_token: str, account_id: str = None, api_key: str = None) -> List[Dict[str, Any]]:
+    """
+    Fetches available users from the provider.
+    Returns a standardized list of dicts:
+    {
+        "id": "user_id",
+        "name": "User Name",
+        "email": "user@example.com",
+        "avatar_url": "...",
+        "username": "username"
+    }
+    """
+    if provider == "github":
+        return await _fetch_github_users(access_token)
+    elif provider == "slack":
+        return await _fetch_slack_users(access_token)
+    elif provider == "jira":
+        return await _fetch_jira_users(access_token)
+    elif provider == "gitlab":
+        return await _fetch_gitlab_users(access_token)
+    elif provider == "clickup":
+        return await _fetch_clickup_users(api_key)
+    elif provider == "linear":
+        return await _fetch_linear_users(api_key)
+    return []
+
 async def _fetch_github_repos(token: str) -> List[Dict[str, Any]]:
     async with httpx.AsyncClient() as client:
         # Fetch user repos
@@ -228,4 +255,187 @@ async def _fetch_linear_teams(api_key: str) -> List[Dict[str, Any]]:
                 }
             }
             for team in teams
+        ]
+
+
+async def _fetch_github_users(token: str) -> List[Dict[str, Any]]:
+    async with httpx.AsyncClient() as client:
+        # 1. Get authenticated user
+        resp = await client.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        if resp.status_code != 200:
+            return []
+
+        me = resp.json()
+        users = [{
+            "id": str(me["id"]),
+            "name": me.get("name") or me.get("login"),
+            "email": me.get("email"),
+            "avatar_url": me.get("avatar_url"),
+            "username": me.get("login")
+        }]
+
+        # 2. Get Org members (if applicable)
+        # This can be heavy, so maybe limit or just return 'me' for now
+        # Ideally we'd fetch members of the selected Org context
+        return users
+
+
+async def _fetch_slack_users(token: str) -> List[Dict[str, Any]]:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://slack.com/api/users.list",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"limit": 1000} # Fetch reasonable amount
+        )
+        data = resp.json()
+        if not data.get("ok"):
+            return []
+
+        members = data.get("members", [])
+        return [
+            {
+                "id": m["id"],
+                "name": m.get("real_name") or m.get("name"),
+                "email": m.get("profile", {}).get("email"),
+                "avatar_url": m.get("profile", {}).get("image_48"),
+                "username": m.get("name")
+            }
+            for m in members
+            if not m.get("deleted") and not m.get("is_bot") and m.get("id") != "USLACKBOT"
+        ]
+
+
+async def _fetch_jira_users(token: str) -> List[Dict[str, Any]]:
+    async with httpx.AsyncClient() as client:
+        # Get accessible resources to find site ID
+        resp = await client.get(
+            "https://api.atlassian.com/oauth/token/accessible-resources",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        if resp.status_code != 200:
+            return []
+
+        sites = resp.json()
+        if not sites:
+            return []
+
+        site_id = sites[0]["id"]
+
+        # Search users
+        resp = await client.get(
+            f"https://api.atlassian.com/ex/jira/{site_id}/rest/api/3/users/search",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"maxResults": 100}
+        )
+        if resp.status_code != 200:
+            return []
+
+        users = resp.json()
+        return [
+            {
+                "id": u["accountId"],
+                "name": u.get("displayName"),
+                "email": u.get("emailAddress"), # Often hidden depending on privacy settings
+                "avatar_url": u.get("avatarUrls", {}).get("48x48"),
+                "username": u.get("displayName")
+            }
+            for u in users
+            if u.get("accountType") == "atlassian"
+        ]
+
+
+async def _fetch_gitlab_users(token: str) -> List[Dict[str, Any]]:
+    # GitLab doesn't allow listing all users easily without admin
+    # But we can get the authenticated user
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://gitlab.com/api/v4/user",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        if resp.status_code != 200:
+            return []
+
+        me = resp.json()
+        return [{
+            "id": str(me["id"]),
+            "name": me.get("name"),
+            "email": me.get("email"),
+            "avatar_url": me.get("avatar_url"),
+            "username": me.get("username")
+        }]
+
+
+async def _fetch_clickup_users(api_key: str) -> List[Dict[str, Any]]:
+    if not api_key:
+        return []
+    async with httpx.AsyncClient() as client:
+        # Get teams first
+        resp = await client.get(
+            "https://api.clickup.com/api/v2/team",
+            headers={"Authorization": api_key}
+        )
+        if resp.status_code != 200:
+            return []
+
+        teams = resp.json().get("teams", [])
+        all_members = []
+
+        for team in teams:
+            members = team.get("members", [])
+            for m in members:
+                user = m.get("user", {})
+                all_members.append({
+                    "id": str(user.get("id")),
+                    "name": user.get("username"),
+                    "email": user.get("email"),
+                    "avatar_url": user.get("profilePicture"),
+                    "username": user.get("username")
+                })
+
+        # Deduplicate by ID
+        unique_members = {m["id"]: m for m in all_members}.values()
+        return list(unique_members)
+
+
+async def _fetch_linear_users(api_key: str) -> List[Dict[str, Any]]:
+    if not api_key:
+        return []
+
+    query = """
+    query {
+      users {
+        nodes {
+          id
+          name
+          displayName
+          email
+          avatarUrl
+        }
+      }
+    }
+    """
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://api.linear.app/graphql",
+            headers={"Authorization": api_key, "Content-Type": "application/json"},
+            json={"query": query}
+        )
+        if resp.status_code != 200:
+            return []
+
+        data = resp.json()
+        users = data.get("data", {}).get("users", {}).get("nodes", [])
+
+        return [
+            {
+                "id": u["id"],
+                "name": u.get("name"),
+                "email": u.get("email"),
+                "avatar_url": u.get("avatarUrl"),
+                "username": u.get("displayName")
+            }
+            for u in users
         ]

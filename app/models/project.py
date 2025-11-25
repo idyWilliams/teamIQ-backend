@@ -93,6 +93,7 @@ class ProjectMember(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     role = Column(String, nullable=True)
+    external_mappings = Column(JSON, nullable=True)
 
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
 

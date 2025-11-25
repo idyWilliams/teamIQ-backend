@@ -387,7 +387,8 @@ def add_project_members_and_sync(
         project_member = ProjectMember(
             project_id=project_id,
             user_id=member.user_id,
-            role=member.role
+            role=member.role,
+            external_mappings=member.external_mappings
         )
         db.add(project_member)
 
@@ -569,9 +570,14 @@ def create_complete_project(
     db.flush()
 
     # Add members
-    if project_data.member_ids:
-        for user_id in project_data.member_ids:
-            member = ProjectMember(project_id=new_project.id, user_id=user_id)
+    if project_data.members:
+        for member_data in project_data.members:
+            member = ProjectMember(
+                project_id=new_project.id,
+                user_id=member_data.user_id,
+                role=member_data.role,
+                external_mappings=member_data.external_mappings
+            )
             db.add(member)
 
     db.commit()

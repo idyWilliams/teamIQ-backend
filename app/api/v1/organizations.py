@@ -375,8 +375,8 @@ def get_organization_members(
                 "user_id": user.id,
                 "name": f"{user.first_name} {user.last_name}",
                 "email": user.email,
-                "role": membership.role,
-                "joined_at": membership.joined_at.isoformat() if hasattr(membership, 'joined_at') else None,
+                "role": getattr(membership, 'role', 'member'),
+                "joined_at": membership.joined_at.isoformat() if hasattr(membership, 'joined_at') and membership.joined_at else None,
                 "profile_picture": user.profile_picture_url
             })
 

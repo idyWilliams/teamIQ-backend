@@ -80,6 +80,7 @@ class CommToolSetup(BaseModel):
 class ProjectMemberAdd(BaseModel):
     user_id: int
     role: Optional[str] = None
+    external_mappings: Optional[Dict[str, str]] = None
 
 
 class UserPermissionSync(BaseModel):
@@ -129,7 +130,7 @@ class ProjectCreate(BaseModel):
     comm_notifications: Optional[Dict[str, bool]] = None
 
     # Step 5
-    member_ids: List[int] = []
+    members: List[ProjectMemberAdd] = []
 
     # Resources (New)
     resources: List[ProjectResourceCreate] = []
@@ -141,6 +142,7 @@ class ProjectMemberResponse(BaseModel):
     id: int
     user_id: int
     role: Optional[str]
+    external_mappings: Optional[Dict[str, str]] = None
 
     model_config = {"from_attributes": True}
 

@@ -39,6 +39,38 @@ class BaseIntegrationSync:
         print(f"📝 Integration error for project {self.project.id}: {error_message}")
         # TODO: Store in database for user dashboard notifications
 
+    def _get_user_from_external_id(self, provider: str, external_id: str) -> Optional[int]:
+        """
+        Get TeamIQ user_id from external platform user ID using mappings.
+        Falls back to email matching if no mapping exists.
+
+        Args:
+            provider: Platform name (e.g., 'github', 'slack', 'jira')
+            external_id: User ID on the external platform
+
+        Returns:
+            TeamIQ user_id or None if not found
+        """
+        from app.models.project import ProjectMember
+        from sqlalchemy import cast, String
+        from sqlalchemy.dialects.postgresql import JSONB
+
+        if not external_id:
+            return None
+
+        # Try to find user via external_mappings
+        member = self.db.query(ProjectMember).filter(
+            ProjectMember.project_id == self.project.id,
+            cast(ProjectMember.external_mappings[provider], String) == str(external_id)
+        ).first()
+
+        if member:
+            return member.user_id
+
+        # No mapping found
+        print(f"⚠️  No mapping found for {provider} user {external_id} in project {self.project.id}")
+        return None
+
 
 # ============================================================================
 # PROJECT MANAGEMENT TOOLS SYNC (Jira, Linear, ClickUp)
@@ -259,7 +291,9 @@ class PMToolSync(BaseIntegrationSync):
                     title = ext_task["fields"]["summary"]
                     description = ext_task["fields"].get("description")
                     status_name = ext_task["fields"]["status"]["name"]
-                    assignee_email = ext_task["fields"].get("assignee", {}).get("emailAddress")
+                    # Get Jira account ID instead of email
+                    assignee_data = ext_task["fields"].get("assignee", {})
+                    assignee_external_id = assignee_data.get("accountId") if assignee_data else None
                     due_date = ext_task["fields"].get("duedate")
                     url = f"https://{workspace}/browse/{ext_task['key']}"
 
@@ -268,7 +302,9 @@ class PMToolSync(BaseIntegrationSync):
                     title = ext_task["title"]
                     description = ext_task.get("description")
                     status_name = ext_task["state"]["name"]
-                    assignee_email = ext_task.get("assignee", {}).get("email")
+                    # Linear uses ID for assignee
+                    assignee_data = ext_task.get("assignee", {})
+                    assignee_external_id = assignee_data.get("id") if assignee_data else None
                     due_date = ext_task.get("dueDate")
                     url = ext_task["url"]
 
@@ -278,7 +314,8 @@ class PMToolSync(BaseIntegrationSync):
                     description = ext_task.get("description")
                     status_name = ext_task["status"]["status"]
                     assignees = ext_task.get("assignees", [])
-                    assignee_email = assignees[0].get("email") if assignees else None
+                    # ClickUp uses numeric ID for assignee
+                    assignee_external_id = str(assignees[0].get("id")) if assignees else None
                     due_date = ext_task.get("due_date")
                     url = ext_task["url"]
 
@@ -305,11 +342,13 @@ class PMToolSync(BaseIntegrationSync):
                 task.due_date = due_date
                 task.external_url = url
 
-                # Map assignee to local user
-                if assignee_email:
-                    user = self.db.query(User).filter(User.email == assignee_email).first()
-                    if user:
-                        task.owner_id = user.id
+                # Map assignee using external_mappings
+                if assignee_external_id:
+                    user_id = self._get_user_from_external_id(source, assignee_external_id)
+                    if user_id:
+                        task.owner_id = user_id
+                    else:
+                        print(f"⚠️  Task '{title}' assigned to unmapped {source} user {assignee_external_id}")
 
             except Exception as e:
                 print(f"⚠️  Error processing task: {str(e)}")
@@ -520,20 +559,26 @@ class VersionControlSync(BaseIntegrationSync):
                 if existing_contribution:
                     continue
 
-                author_email = commit["commit"]["author"].get("email")
-                user = self.db.query(User).filter(User.email == author_email).first()
-                if user:
-                    new_contribution = Contribution(
-                        user_id=user.id,
-                        project_id=self.project.id,
-                        source="github",
-                        type="commit",
-                        external_id=external_id,
-                        message=commit["commit"]["message"],
-                        timestamp=commit["commit"]["author"]["date"],
-                        url=commit["html_url"]
-                    )
-                    self.db.add(new_contribution)
+                # Get GitHub author ID instead of email
+                author_data = commit.get("author")
+                github_author_id = str(author_data["id"]) if author_data and "id" in author_data else None
+
+                if github_author_id:
+                    user_id = self._get_user_from_external_id("github", github_author_id)
+                    if user_id:
+                        new_contribution = Contribution(
+                            user_id=user_id,
+                            project_id=self.project.id,
+                            source="github",
+                            type="commit",
+                            external_id=external_id,
+                            message=commit["commit"]["message"],
+                            timestamp=commit["commit"]["author"]["date"],
+                            url=commit["html_url"]
+                        )
+                        self.db.add(new_contribution)
+                    else:
+                        print(f"⚠️  GitHub commit by unmapped user {github_author_id}")
             except Exception as e:
                 print(f"⚠️  Error processing GitHub commit: {str(e)}")
                 continue
@@ -549,20 +594,25 @@ class VersionControlSync(BaseIntegrationSync):
                 if existing_contribution:
                     continue
 
-                author_email = commit.get("author_email")
-                user = self.db.query(User).filter(User.email == author_email).first()
-                if user:
-                    new_contribution = Contribution(
-                        user_id=user.id,
-                        project_id=self.project.id,
-                        source="gitlab",
-                        type="commit",
-                        external_id=external_id,
-                        message=commit["message"],
-                        timestamp=commit["authored_date"],
-                        url=commit["web_url"]
-                    )
-                    self.db.add(new_contribution)
+                # Get GitLab author ID
+                gitlab_author_id = str(commit.get("author_id")) if commit.get("author_id") else None
+
+                if gitlab_author_id:
+                    user_id = self._get_user_from_external_id("gitlab", gitlab_author_id)
+                    if user_id:
+                        new_contribution = Contribution(
+                            user_id=user_id,
+                            project_id=self.project.id,
+                            source="gitlab",
+                            type="commit",
+                            external_id=external_id,
+                            message=commit["message"],
+                            timestamp=commit["authored_date"],
+                            url=commit["web_url"]
+                        )
+                        self.db.add(new_contribution)
+                    else:
+                        print(f"⚠️  GitLab commit by unmapped user {gitlab_author_id}")
             except Exception as e:
                 print(f"⚠️  Error processing GitLab commit: {str(e)}")
                 continue
@@ -578,20 +628,25 @@ class VersionControlSync(BaseIntegrationSync):
                 if existing_contribution:
                     continue
 
-                author_email = commit["author"]["raw"]
-                user = self.db.query(User).filter(User.email == author_email).first()
-                if user:
-                    new_contribution = Contribution(
-                        user_id=user.id,
-                        project_id=self.project.id,
-                        source="bitbucket",
-                        type="commit",
-                        external_id=external_id,
-                        message=commit["message"],
-                        timestamp=commit["date"],
-                        url=commit["links"]["html"]["href"]
-                    )
-                    self.db.add(new_contribution)
+                # Get Bitbucket author UUID
+                bitbucket_author_id = commit.get("author", {}).get("uuid")
+
+                if bitbucket_author_id:
+                    user_id = self._get_user_from_external_id("bitbucket", bitbucket_author_id)
+                    if user_id:
+                        new_contribution = Contribution(
+                            user_id=user_id,
+                            project_id=self.project.id,
+                            source="bitbucket",
+                            type="commit",
+                            external_id=external_id,
+                            message=commit["message"],
+                            timestamp=commit["date"],
+                            url=commit["links"]["html"]["href"]
+                        )
+                        self.db.add(new_contribution)
+                    else:
+                        print(f"⚠️  Bitbucket commit by unmapped user {bitbucket_author_id}")
             except Exception as e:
                 print(f"⚠️  Error processing Bitbucket commit: {str(e)}")
                 continue
@@ -681,21 +736,26 @@ class CommunicationSync(BaseIntegrationSync):
                 if existing_activity:
                     continue
 
-                user_id = message.get("user")
-                user = self.db.query(User).filter(User.external_id == user_id).first()
-                if user:
-                    new_activity = Activity(
-                        user_id=user.id,
-                        project_id=self.project.id,
-                        source="slack",
-                        type="message",
-                        external_id=external_id,
-                        content=message["text"],
-                        timestamp=datetime.fromtimestamp(float(external_id)),
-                        channel=channel_id,
-                        url=f"https://slack.com/archives/{channel_id}/p{external_id.replace('.', '')}"
-                    )
-                    self.db.add(new_activity)
+                # Get Slack user ID
+                slack_user_id = message.get("user")
+
+                if slack_user_id:
+                    user_id = self._get_user_from_external_id("slack", slack_user_id)
+                    if user_id:
+                        new_activity = Activity(
+                            user_id=user_id,
+                            project_id=self.project.id,
+                            source="slack",
+                            type="message",
+                            external_id=external_id,
+                            content=message["text"],
+                            timestamp=datetime.fromtimestamp(float(external_id)),
+                            channel=channel_id,
+                            url=f"https://slack.com/archives/{channel_id}/p{external_id.replace('.', '')}"
+                        )
+                        self.db.add(new_activity)
+                    else:
+                        print(f"⚠️  Slack message by unmapped user {slack_user_id}")
             except Exception as e:
                 print(f"⚠️  Error processing Slack message: {str(e)}")
                 continue
@@ -740,21 +800,26 @@ class CommunicationSync(BaseIntegrationSync):
                 if existing_activity:
                     continue
 
-                author_id = message["author"]["id"]
-                user = self.db.query(User).filter(User.external_id == author_id).first()
-                if user:
-                    new_activity = Activity(
-                        user_id=user.id,
-                        project_id=self.project.id,
-                        source="discord",
-                        type="message",
-                        external_id=external_id,
-                        content=message["content"],
-                        timestamp=message["timestamp"],
-                        channel=message["channel_id"],
-                        url=f"https://discord.com/channels/{self.project.organization_id}/{message['channel_id']}/{external_id}"
-                    )
-                    self.db.add(new_activity)
+                # Get Discord author ID
+                discord_author_id = message["author"]["id"]
+
+                if discord_author_id:
+                    user_id = self._get_user_from_external_id("discord", discord_author_id)
+                    if user_id:
+                        new_activity = Activity(
+                            user_id=user_id,
+                            project_id=self.project.id,
+                            source="discord",
+                            type="message",
+                            external_id=external_id,
+                            content=message["content"],
+                            timestamp=message["timestamp"],
+                            channel=message["channel_id"],
+                            url=f"https://discord.com/channels/{self.project.organization_id}/{message['channel_id']}/{external_id}"
+                        )
+                        self.db.add(new_activity)
+                    else:
+                        print(f"⚠️  Discord message by unmapped user {discord_author_id}")
             except Exception as e:
                 print(f"⚠️  Error processing Discord message: {str(e)}")
                 continue
