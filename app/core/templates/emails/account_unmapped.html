@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>🔓 Account Unmapping Notification</h2>
+
+<p>Hi {{ user_name }},</p>
+
+<p>
+  Your <strong>{{ provider }}</strong> account mapping has been removed from the project <strong>{{ project_name }}</strong>.
+</p>
+
+<div style="background-color: #fff3f3; border-left: 4px solid #dc3545; padding: 16px; margin: 24px 0; border-radius: 4px;">
+  <p style="margin: 0; font-weight: 600; color: #dc3545;">Unmapping Details:</p>
+  <p style="margin: 8px 0 0 0; font-size: 14px;">
+    <strong>Provider:</strong> {{ provider }}<br>
+    <strong>Reason:</strong> {{ reason }}
+  </p>
+</div>
+
+<p>
+  This means that TeamIQ will no longer sync tasks, commits, or activities from this {{ provider }} account to your profile in this project.
+</p>
+
+<p style="margin-top: 24px;">
+  <strong>What happens next:</strong>
+</p>
+<ul style="margin: 8px 0 16px 20px; line-height: 1.8;">
+  <li>Tasks from {{ provider }} will no longer appear in your TeamIQ dashboard</li>
+  <li>Your contributions from {{ provider }} won't be tracked for this project</li>
+  <li>You can be remapped to the correct account at any time</li>
+</ul>
+
+<p style="margin-top: 24px; padding: 16px; background-color: #f0f7ff; border-radius: 4px; border-left: 4px solid #0052CC;">
+  <strong>ℹ️ Need to remap?</strong><br>
+  If you need to be mapped to a different {{ provider }} account, please contact your project administrator.
+</p>
+
+<a href="{{ app_url }}/projects" class="cta-button">View Project Dashboard</a>
+
+<p style="margin-top: 32px; font-size: 14px; color: #666;">
+  If you believe this was done in error, please contact your project administrator immediately.
+</p>
+{% endblock %}

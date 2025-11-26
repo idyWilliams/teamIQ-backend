@@ -21,7 +21,8 @@ from app.api.v1 import (
     notifications,
     upload,
     webhooks,
-    ml
+    ml,
+    user_mappings
 )
 
 # Logger
@@ -168,6 +169,11 @@ app.include_router(
     chat.router,
     prefix="/api/v1/chat",
     tags=["AI Chat"]
+)
+app.include_router(
+    user_mappings.router,
+    prefix="/api/v1/user-mappings",
+    tags=["User Mappings"]
 )
 
 
