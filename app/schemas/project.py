@@ -154,7 +154,7 @@ class ProjectResponse(BaseModel):
     owner_id: Optional[int]
     organization_id: Optional[int]
     project_lead_id: Optional[int]
-    stacks: List[str]
+    stacks: Optional[List[str]] = None
     start_date: Optional[datetime.datetime]
     end_date: Optional[datetime.datetime]
 
@@ -163,12 +163,12 @@ class ProjectResponse(BaseModel):
     vc_tool: Optional[str]
     comm_tool: Optional[str]
 
-    status: ProjectStatus
+    status: Optional[ProjectStatus] = None
     pct_complete: float
     is_visible: bool
 
     createdAt: datetime.datetime
-    updatedAt: datetime.datetime
+    updatedAt: Optional[datetime.datetime] = None
 
     model_config = {"from_attributes": True}
 
