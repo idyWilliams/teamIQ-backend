@@ -258,7 +258,7 @@ def oauth_start(provider: str, orgId: str, db: Session = Depends(get_db)):
 
 @router.get("/oauth/callback")
 async def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3001")
+    frontend_url = os.getenv("FRONTEND_URL", "https://team-iq-frontend.vercel.app")
 
     try:
         try:
