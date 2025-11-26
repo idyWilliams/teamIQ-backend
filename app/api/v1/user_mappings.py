@@ -16,7 +16,7 @@ from app.schemas.user_mapping import (
     UserMappingResponse
 )
 from app.services.user_mapping_service import UserMappingService
-from app.utils.response import create_response
+from app.schemas.response_model import create_response
 
 router = APIRouter()
 
