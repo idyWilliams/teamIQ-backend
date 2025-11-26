@@ -78,9 +78,12 @@ class CommToolSetup(BaseModel):
 
 # Step 5: User & Permission Sync
 class ProjectMemberAdd(BaseModel):
-    user_id: int
+    user_id: int = Field(..., alias="userId")
     role: Optional[str] = None
-    external_mappings: Optional[Dict[str, str]] = None
+    external_mappings: Optional[Dict[str, str]] = Field(None, alias="externalMappings")
+
+    class Config:
+        populate_by_name = True
 
 
 class UserPermissionSync(BaseModel):
@@ -109,21 +112,21 @@ class ProjectCreate(BaseModel):
     project_image: Optional[str] = None
     is_visible: bool = True
 
-    # Step 2: Required
-    pm_tool: str
-    pm_integration_method: IntegrationMethod
+    # Step 2: Optional
+    pm_tool: Optional[str] = None
+    pm_integration_method: Optional[IntegrationMethod] = None
     pm_project_id: Optional[str] = None
     pm_api_key: Optional[str] = None
 
-    # Step 3: Required
-    vc_tool: str
-    vc_integration_method: IntegrationMethod
-    vc_repository_url: str
+    # Step 3: Optional
+    vc_tool: Optional[str] = None
+    vc_integration_method: Optional[IntegrationMethod] = None
+    vc_repository_url: Optional[str] = None
     vc_api_key: Optional[str] = None
 
-    # Step 4: Required
-    comm_tool: str
-    comm_integration_method: IntegrationMethod
+    # Step 4: Optional
+    comm_tool: Optional[str] = None
+    comm_integration_method: Optional[IntegrationMethod] = None
     comm_channel_id: Optional[str] = None
     comm_api_key: Optional[str] = None
     comm_webhook_url: Optional[str] = None
