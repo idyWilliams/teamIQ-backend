@@ -87,6 +87,7 @@ class CommitActivity(Base):
     files_changed = Column(Integer, default=0)
     additions = Column(Integer, default=0)
     deletions = Column(Integer, default=0)
+    files = Column(JSON, nullable=True)  # List of files changed
 
     # External
     external_url = Column(String, nullable=True)

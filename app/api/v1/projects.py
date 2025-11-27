@@ -7,6 +7,8 @@ from app.core.security import get_current_organization, get_current_user_or_orga
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.project import Project, ProjectMember
+from app.models.task import Task
+from app.models.activity import Activity, CommitActivity
 from app.schemas.project import (
     ProjectDetailsCreate,
     PMToolSetup,
@@ -66,199 +68,6 @@ def get_project_users(
     )
 
 
-# ------------------------
-# STEP-BY-STEP ENDPOINTS
-# ------------------------
-
-@router.post("/create/step1-details")
-def create_project_step1(
-    project_data: ProjectDetailsCreate,
-    db: Session = Depends(get_db),
-    current_user: Organization = Depends(get_current_organization)
-):
-    """
-    Step 1: Create project with basic details
-    """
-
-    if not isinstance(current_user, Organization):
-        raise HTTPException(status_code=403, detail="Only organizations can create projects")
-
-    organization_id = current_user.id
-    owner_id = None
-    project_lead_id = None
-
-    # Create initial project
-    new_project = Project(
-        name=project_data.name,
-        description=project_data.description,
-        owner_id=owner_id,
-        organization_id=organization_id,
-        project_lead_id=project_lead_id,
-        stacks=project_data.stacks,
-        start_date=project_data.start_date,
-        end_date=project_data.end_date,
-        linked_documents=project_data.linked_documents,
-        project_image=project_data.project_image,
-        is_visible=project_data.is_visible
-    )
-
-    db.add(new_project)
-    db.commit()
-    db.refresh(new_project)
-
-    return create_response(
-        success=True,
-        message="Project details saved successfully",
-        data={"project_id": new_project.id, "project": ProjectResponse.model_validate(new_project)}
-    )
-
-
-
-
-# ==============================================================================
-# STEP 2: PROJECT MANAGEMENT TOOL
-# ==============================================================================
-
-@router.patch("/{project_id}/step2-pm-tool")
-def update_project_pm_tool(
-    project_id: int,
-    pm_data: PMToolSetup,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_or_organization)
-):
-    """
-    Step 2: Configure Project Management Tool integration
-    Auto-generates webhook secret for security
-    """
-    project = db.query(Project).filter(Project.id == project_id).first()
-
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    # Authorization check
-    if isinstance(current_user, User):
-        user_org_ids = [org.id for org in current_user.organizations]
-        if project.organization_id not in user_org_ids:
-            raise HTTPException(status_code=403, detail="Not authorized")
-    elif isinstance(current_user, Organization):
-        if project.organization_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized")
-    else:
-        raise HTTPException(status_code=403, detail="Invalid user type")
-
-    # ✅ VALIDATE configuration
-    # try:
-    #     validated = validate_tool_config(
-    #         "project_management",
-    #         pm_data.pm_tool.value,
-    #         pm_data.dict()
-    #     )
-    # except Exception as e:
-    #     raise HTTPException(
-    #         status_code=400,
-    #         detail=f"Invalid configuration: {str(e)}"
-    #     )
-
-    # Update PM tool settings
-    project.pm_tool = pm_data.pm_tool.value
-    project.pm_integration_method = pm_data.pm_integration_method
-    project.pm_project_id = pm_data.pm_project_id
-    project.pm_workspace_url = pm_data.pm_workspace_url
-
-    # ✅ ENCRYPT sensitive fields
-    if pm_data.pm_api_key:
-        project.pm_api_key = encrypt_field(pm_data.pm_api_key)
-
-    if pm_data.pm_access_token:
-        project.pm_access_token = encrypt_field(pm_data.pm_access_token)
-
-    # For Jira/Bitbucket: Store email for Basic Auth
-    if pm_data.email and pm_data.pm_tool.value in ["jira", "bitbucket"]:
-        project.pm_email = encrypt_field(pm_data.email)
-
-    # ✅ AUTO-GENERATE webhook secret
-    webhook_secret = generate_jira_webhook_secret()
-    project.pm_webhook_secret = encrypt_field(webhook_secret)
-    print(f"✅ Generated PM webhook secret for project {project_id}")
-
-    db.commit()
-    db.refresh(project)
-
-    return create_response(
-        success=True,
-        message=f"{pm_data.pm_tool.value.capitalize()} configured successfully",
-        data=ProjectResponse.model_validate(project)
-    )
-
-
-# ==============================================================================
-# STEP 3: VERSION CONTROL
-# ==============================================================================
-
-@router.patch("/{project_id}/step3-version-control")
-def update_project_version_control(
-    project_id: int,
-    vc_data: VCSetup,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_or_organization)
-):
-    """
-    Step 3: Configure Version Control integration
-    Auto-generates webhook secret if not provided
-    """
-    project = db.query(Project).filter(Project.id == project_id).first()
-
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    # Authorization check
-    if isinstance(current_user, User):
-        user_org_ids = [org.id for org in current_user.organizations]
-        if project.organization_id not in user_org_ids:
-            raise HTTPException(status_code=403, detail="Not authorized")
-    elif isinstance(current_user, Organization):
-        if project.organization_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized")
-    else:
-        raise HTTPException(status_code=403, detail="Invalid user type")
-
-    # ✅ VALIDATE configuration
-    # try:
-    #     validated = validate_tool_config(
-    #         "version_control",
-    #         vc_data.vc_tool.value,
-    #         vc_data.dict()
-    #     )
-    # except Exception as e:
-    #     raise HTTPException(
-    #         status_code=400,
-    #         detail=f"Invalid configuration: {str(e)}"
-    #     )
-
-    # Update VC settings
-    project.vc_tool = vc_data.vc_tool.value
-    project.vc_integration_method = vc_data.vc_integration_method
-    project.vc_repository_url = vc_data.vc_repository_url
-
-    # ✅ ENCRYPT credentials
-    if vc_data.vc_access_token:
-        project.vc_access_token = encrypt_field(vc_data.vc_access_token)
-
-    if vc_data.vc_api_key:
-        project.vc_api_key = encrypt_field(vc_data.vc_api_key)
-
-    if vc_data.email:  # For Bitbucket
-        project.vc_email = encrypt_field(vc_data.email)
-
-    # ✅ AUTO-GENERATE WEBHOOK SECRET if not provided
-    if vc_data.vc_webhook_secret:
-        # User provided their own secret
-        project.vc_webhook_secret = encrypt_field(vc_data.vc_webhook_secret)
-    else:
-        # Generate secure secret automatically
-        generated_secret = generate_github_webhook_secret()
-        project.vc_webhook_secret = encrypt_field(generated_secret)
-        print(f"✅ Generated VC webhook secret for project {project_id}")
 
     db.commit()
     db.refresh(project)
@@ -274,22 +83,25 @@ def update_project_version_control(
 # STEP 4: COMMUNICATION TOOL
 # ==============================================================================
 
-@router.patch("/{project_id}/step4-communication-tool")
-def update_project_communication_tool(
+
+# ------------------------
+# PROJECT DATA ENDPOINTS
+# ------------------------
+
+@router.get("/{project_id}/tasks")
+def get_project_tasks(
     project_id: int,
-    comm_data: CommToolSetup,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_or_organization)
 ):
     """
-    Step 4: Configure Communication Tool integration
+    Get all tasks for a specific project
     """
-    project = db.query(Project).filter(Project.id == project_id).first()
-
+    project = project_repository.get_project_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Authorization check
+    # Check authorization
     if isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         if project.organization_id not in user_org_ids:
@@ -297,78 +109,30 @@ def update_project_communication_tool(
     elif isinstance(current_user, Organization):
         if project.organization_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
-    else:
-        raise HTTPException(status_code=403, detail="Invalid user type")
 
-    # # ✅ VALIDATE configuration
-    # try:
-    #     validated = validate_tool_config(
-    #         "communication",
-    #         comm_data.comm_tool.value,
-    #         comm_data.dict()
-    #     )
-    # except Exception as e:
-    #     raise HTTPException(
-    #         status_code=400,
-    #         detail=f"Invalid configuration: {str(e)}"
-    #     )
-
-    # Update communication tool settings
-    project.comm_tool = comm_data.comm_tool.value
-    project.comm_integration_method = comm_data.comm_integration_method
-    project.comm_channel_id = comm_data.comm_channel_id
-    project.comm_webhook_url = comm_data.comm_webhook_url
-    project.comm_notifications = comm_data.comm_notifications
-
-    # ✅ ENCRYPT API key
-    if comm_data.comm_api_key:
-        project.comm_api_key = encrypt_field(comm_data.comm_api_key)
-
-    # Teams-specific fields
-    if comm_data.comm_tool.value == "teams":
-        if hasattr(comm_data, 'client_id') and comm_data.client_id:
-            project.teams_client_id = comm_data.client_id
-        if hasattr(comm_data, 'tenant_id') and comm_data.tenant_id:
-            project.teams_tenant_id = comm_data.tenant_id
-
-    # ✅ AUTO-GENERATE webhook secret for Slack
-    if comm_data.comm_tool.value == "slack":
-        webhook_secret = generate_slack_signing_secret()
-        project.comm_webhook_secret = encrypt_field(webhook_secret)
-        print(f"✅ Generated Slack signing secret for project {project_id}")
-
-    db.commit()
-    db.refresh(project)
+    tasks = db.query(Task).filter(Task.project_id == project_id).all()
 
     return create_response(
         success=True,
-        message=f"{comm_data.comm_tool.value.capitalize()} configured successfully",
-        data=ProjectResponse.model_validate(project)
+        message="Project tasks retrieved successfully",
+        data=tasks
     )
 
-
-# ==============================================================================
-# STEP 5: ADD MEMBERS & TRIGGER INITIAL SYNC
-# ==============================================================================
-
-@router.patch("/{project_id}/step5-add-members")
-def add_project_members_and_sync(
+@router.get("/{project_id}/activities")
+def get_project_activities(
     project_id: int,
-    members_data: UserPermissionSync,
-    background_tasks: BackgroundTasks,
+    limit: int = 50,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_or_organization)
 ):
     """
-    Step 5: Add team members to project and trigger initial sync
-    This pulls all tasks, commits, and activities from external tools
+    Get activities (commits, etc.) for a specific project
     """
-    project = db.query(Project).filter(Project.id == project_id).first()
-
+    project = project_repository.get_project_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Authorization check
+    # Check authorization
     if isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         if project.organization_id not in user_org_ids:
@@ -376,58 +140,135 @@ def add_project_members_and_sync(
     elif isinstance(current_user, Organization):
         if project.organization_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
-    else:
-        raise HTTPException(status_code=403, detail="Invalid user type")
 
-    # Clear existing members
-    db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
-
-    # Add new members
-    for member in members_data.members:
-        project_member = ProjectMember(
-            project_id=project_id,
-            user_id=member.user_id,
-            role=member.role,
-            external_mappings=member.external_mappings
-        )
-        db.add(project_member)
-
-    db.commit()
-    db.refresh(project)
-
-    # ✅ INITIALIZE webhook tracking
-    webhook_service = get_webhook_service(db)
-    webhook_service.initialize_webhooks_for_project(project_id)
-
-    # ✅ TRIGGER initial sync in background
-    background_tasks.add_task(perform_initial_project_sync, project_id, db)
+    activities = db.query(Activity).filter(
+        Activity.project_id == project_id
+    ).order_by(Activity.created_at.desc()).limit(limit).all()
 
     return create_response(
         success=True,
-        message="Setup complete! Configure webhooks for real-time sync.",
+        message="Project activities retrieved successfully",
+        data=activities
+    )
+
+@router.get("/{project_id}/commits")
+def get_project_commits(
+    project_id: int,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Get detailed commits for a specific project, including file changes
+    """
+    project = project_repository.get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Check authorization
+    if isinstance(current_user, User):
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif isinstance(current_user, Organization):
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    commits = db.query(CommitActivity).filter(
+        CommitActivity.project_id == project_id
+    ).order_by(CommitActivity.timestamp.desc()).limit(limit).all()
+
+    return create_response(
+        success=True,
+        message="Project commits retrieved successfully",
+        data=commits
+    )
+
+@router.get("/{project_id}/comprehensive-data")
+def get_project_comprehensive_data(
+    project_id: int,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Get ALL project data in one unified response.
+    Includes: Project details, Members, Tasks, Activities, Commits, Resources.
+    """
+    project = project_repository.get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Check authorization
+    if isinstance(current_user, User):
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif isinstance(current_user, Organization):
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Fetch all data
+    members = db.query(ProjectMember).filter(ProjectMember.project_id == project_id).all()
+    tasks = db.query(Task).filter(Task.project_id == project_id).all()
+
+    activities = db.query(Activity).filter(
+        Activity.project_id == project_id
+    ).order_by(Activity.created_at.desc()).limit(limit).all()
+
+    commits = db.query(CommitActivity).filter(
+        CommitActivity.project_id == project_id
+    ).order_by(CommitActivity.timestamp.desc()).limit(limit).all()
+
+    resources = db.query(ProjectResource).filter(ProjectResource.project_id == project_id).all()
+
+    # Enrich members with user details
+    enriched_members = []
+    for member in members:
+        user = db.query(User).filter(User.id == member.user_id).first()
+        enriched_members.append({
+            "id": member.id,
+            "user_id": member.user_id,
+            "user_name": f"{user.first_name} {user.last_name}" if user else "Unknown",
+            "user_email": user.email if user else "",
+            "role": member.role,
+            "external_mappings": member.external_mappings
+        })
+
+    return create_response(
+        success=True,
+        message="Comprehensive project data retrieved",
         data={
             "project": ProjectResponse.model_validate(project),
-            "next_step": f"/api/v1/projects/{project_id}/webhook-setup-instructions"
+            "members": enriched_members,
+            "tasks": tasks,
+            "activities": activities,
+            "commits": commits,
+            "resources": [
+                {
+                    "id": r.id,
+                    "resource_name": r.resource_name,
+                    "resource_type": r.resource_type,
+                    "connection_id": r.connection_id
+                } for r in resources
+            ]
         }
     )
 
-
-@router.post("/{project_id}/resources")
-def link_project_resources(
+@router.get("/{project_id}/members")
+def get_project_members_stats(
     project_id: int,
-    resources: List[ProjectResourceCreate],
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_or_organization)
 ):
     """
-    Link multiple external resources (repos, channels, etc.) to a project.
-    Replaces existing resources for the project.
+    Get project members with their stats
     """
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = project_repository.get_project_by_id(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Authorization check
+    # Check authorization
     if isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         if project.organization_id not in user_org_ids:
@@ -436,75 +277,38 @@ def link_project_resources(
         if project.organization_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
 
-    # Clear existing resources
-    db.query(ProjectResource).filter(ProjectResource.project_id == project_id).delete()
+    members = db.query(ProjectMember).filter(ProjectMember.project_id == project_id).all()
 
-    # Add new resources
-    for res in resources:
-        new_resource = ProjectResource(
-            project_id=project_id,
-            connection_id=res.connectionId,
-            resource_id=res.resourceId,
-            resource_type=res.resourceType,
-            resource_name=res.resourceName,
-            resource_metadata=res.metadata
-        )
-        db.add(new_resource)
+    # Enrich with basic stats
+    member_data = []
+    for member in members:
+        # Get user details
+        user = db.query(User).filter(User.id == member.user_id).first()
 
-    db.commit()
+        # Calculate stats (mocked for now, can be real later)
+        tasks_assigned = db.query(Task).filter(Task.assignee_id == member.user_id, Task.project_id == project_id).count()
+        tasks_completed = db.query(Task).filter(Task.assignee_id == member.user_id, Task.project_id == project_id, Task.status == "done").count()
+
+        member_data.append({
+            "id": member.id,
+            "user_id": member.user_id,
+            "user_name": f"{user.first_name} {user.last_name}" if user else "Unknown",
+            "user_email": user.email if user else "",
+            "user_avatar": user.profile_picture if user else None,
+            "role": member.role,
+            "external_mappings": member.external_mappings,
+            "stats": {
+                "tasks_assigned": tasks_assigned,
+                "tasks_completed": tasks_completed,
+                "completion_rate": (tasks_completed / tasks_assigned * 100) if tasks_assigned > 0 else 0
+            }
+        })
 
     return create_response(
         success=True,
-        message=f"Linked {len(resources)} resources to project",
-        data={"count": len(resources)}
+        message="Project members retrieved successfully",
+        data=member_data
     )
-
-
-
-def perform_initial_project_sync(project_id: int, db: Session):
-    """
-    Perform initial sync after project creation
-    Pulls: Tasks, Commits, Messages, Maps Users
-    """
-    from app.services.initial_sync import InitialProjectSync
-
-    try:
-        sync_service = InitialProjectSync(project_id, db)
-        results = sync_service.sync_all()
-
-        print(f"✅ Initial sync completed for project {project_id}")
-        print(f"   Tasks synced: {results.get('tasks_synced', 0)}")
-        print(f"   Commits synced: {results.get('commits_synced', 0)}")
-        print(f"   Activities synced: {results.get('activities_synced', 0)}")
-        print(f"   Users mapped: {results.get('users_mapped', 0)}")
-
-    except Exception as e:
-        print(f"❌ Initial sync failed for project {project_id}: {str(e)}")
-
-
-def perform_initial_project_sync(project_id: int, db: Session):
-    """
-    Perform initial sync after project creation
-    Pulls:
-    - Tasks from Jira/ClickUp
-    - Commits from GitHub/GitLab
-    - Messages from Slack/Discord
-    - Maps external users to TeamIQ users
-    """
-    from app.services.initial_sync import InitialProjectSync
-
-    try:
-        sync_service = InitialProjectSync(project_id, db)
-        results = sync_service.sync_all()
-
-        print(f"✅ Initial sync completed for project {project_id}")
-        print(f"   Tasks synced: {results.get('tasks_synced', 0)}")
-        print(f"   Commits synced: {results.get('commits_synced', 0)}")
-        print(f"   Activities synced: {results.get('activities_synced', 0)}")
-        print(f"   Users mapped: {results.get('users_mapped', 0)}")
-
-    except Exception as e:
-        print(f"❌ Initial sync failed for project {project_id}: {str(e)}")
 
 # ------------------------
 # ALL-IN-ONE ENDPOINT (Optional)

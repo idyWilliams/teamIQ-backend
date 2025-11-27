@@ -97,6 +97,24 @@ class InitialProjectSync:
              print(f"⚠️ Skipping GitHub sync for {repo_path}: No credentials")
              return
 
+        # 1. Fetch Languages (Technologies)
+        try:
+            lang_response = requests.get(
+                f"https://api.github.com/repos/{repo_path}/languages",
+                headers=headers,
+                timeout=10
+            )
+            if lang_response.status_code == 200:
+                languages = list(lang_response.json().keys())
+                # Update project stacks
+                if languages:
+                    self.project.stacks = languages
+                    self.db.add(self.project)
+                    self.db.commit()
+                    print(f"✅ Updated project stacks: {languages}")
+        except Exception as e:
+            print(f"⚠️ Failed to fetch languages: {e}")
+
         # Sync commits (last 30 days)
         since = (datetime.utcnow() - timedelta(days=30)).isoformat()
 
@@ -112,6 +130,16 @@ class InitialProjectSync:
             if response.status_code == 200:
                 commits = response.json()
                 for commit in commits:
+                    # For the most recent 10 commits, fetch details to get files/stats
+                    # This avoids rate limits while giving some detailed data
+                    if commits.index(commit) < 10:
+                        try:
+                            detail_resp = requests.get(commit["url"], headers=headers, timeout=10)
+                            if detail_resp.status_code == 200:
+                                commit = detail_resp.json()
+                        except:
+                            pass
+
                     self._save_commit_activity(commit, "github", resource)
                 self.results["commits_synced"] += len(commits)
 
@@ -162,6 +190,19 @@ class InitialProjectSync:
         if existing:
             return
 
+        # Extract file changes if available
+        files_list = []
+        if "files" in commit_data:
+            files_list = [
+                {
+                    "filename": f.get("filename"),
+                    "status": f.get("status"),
+                    "additions": f.get("additions"),
+                    "deletions": f.get("deletions")
+                }
+                for f in commit_data["files"]
+            ]
+
         # Create commit activity
         commit = CommitActivity(
             user_id=user.id,
@@ -176,7 +217,8 @@ class InitialProjectSync:
             ),
             files_changed=len(commit_data.get("files", [])),
             additions=sum(f.get("additions", 0) for f in commit_data.get("files", [])),
-            deletions=sum(f.get("deletions", 0) for f in commit_data.get("files", []))
+            deletions=sum(f.get("deletions", 0) for f in commit_data.get("files", [])),
+            files=files_list  # ✅ Save files list
         )
 
         self.db.add(commit)
