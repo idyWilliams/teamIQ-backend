@@ -526,7 +526,7 @@ class DashboardService:
 
         return {
             "organization_id": org_id,
-            "organization_name": org.name,
+            "organization_name": org.organization_name,
             "metrics": {
                 "team": {
                     "total_members": dashboard.total_members,

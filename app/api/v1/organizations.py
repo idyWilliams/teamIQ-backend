@@ -385,7 +385,7 @@ def get_organization_members(
         message=f"Found {len(members)} members",
         data={
             "organization_id": org_id,
-            "organization_name": current_user.name,
+            "organization_name": current_user.organization_name,
             "total_members": len(members),
             "members": members
         }
