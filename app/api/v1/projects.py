@@ -7,7 +7,7 @@ from app.core.security import get_current_organization, get_current_user_or_orga
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.project import Project, ProjectMember
-from app.models.task import Task
+from app.models.task import Task, TaskStatus
 from app.models.activity import Activity, CommitActivity
 from app.schemas.project import (
     ProjectDetailsCreate,
@@ -255,6 +255,118 @@ def get_project_comprehensive_data(
         }
     )
 
+@router.get("/{project_id}/my-data")
+def get_my_project_data(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Get project data specific to the current user.
+    Returns project progress, user's contributions, and personal stats.
+    """
+    # Only users can access this endpoint
+    if not isinstance(current_user, User):
+        raise HTTPException(status_code=403, detail="This endpoint is for users only")
+
+    project = project_repository.get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Check if user is a member of this project
+    is_member = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == current_user.id
+    ).first()
+
+    # Also check if project is in user's organization
+    user_org_ids = [org.id for org in current_user.organizations]
+    in_org = project.organization_id in user_org_ids
+
+    if not is_member and not in_org:
+        raise HTTPException(status_code=403, detail="Not authorized to view this project")
+
+    # Get PROJECT-WIDE stats (overall progress)
+    all_project_tasks = db.query(Task).filter(Task.project_id == project_id).all()
+    total_project_tasks = len(all_project_tasks)
+    completed_project_tasks = len([t for t in all_project_tasks if t.status == TaskStatus.DONE])
+    project_progress = (completed_project_tasks / total_project_tasks * 100) if total_project_tasks > 0 else 0
+
+    total_project_commits = db.query(CommitActivity).filter(
+        CommitActivity.project_id == project_id
+    ).count()
+
+    total_project_members = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id
+    ).count()
+
+    # Get USER-SPECIFIC data
+    my_tasks = db.query(Task).filter(
+        Task.project_id == project_id,
+        Task.owner_id == current_user.id
+    ).all()
+
+    my_commits = db.query(CommitActivity).filter(
+        CommitActivity.project_id == project_id,
+        CommitActivity.user_id == current_user.id
+    ).order_by(CommitActivity.timestamp.desc()).all()
+
+    my_activities = db.query(Activity).filter(
+        Activity.project_id == project_id,
+        Activity.user_id == current_user.id
+    ).order_by(Activity.timestamp.desc()).all()
+
+    # Get user's membership info
+    membership = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == current_user.id
+    ).first()
+
+    # Calculate user stats
+    my_total_tasks = len(my_tasks)
+    my_completed_tasks = len([t for t in my_tasks if t.status == TaskStatus.DONE])
+    my_total_commits = len(my_commits)
+    my_total_activities = len(my_activities)
+
+    # Calculate contribution percentage
+    my_contribution_percentage = (my_total_commits / total_project_commits * 100) if total_project_commits > 0 else 0
+
+    return create_response(
+        success=True,
+        message="Your project data retrieved successfully",
+        data={
+            "project_info": {
+                "id": project.id,
+                "name": project.name,
+                "description": project.description,
+                "status": project.status,
+                "stacks": project.stacks
+            },
+            "project_progress": {
+                "total_tasks": total_project_tasks,
+                "completed_tasks": completed_project_tasks,
+                "progress_percentage": round(project_progress, 2),
+                "total_commits": total_project_commits,
+                "total_members": total_project_members
+            },
+            "my_membership": {
+                "role": membership.role if membership else None,
+                "external_mappings": membership.external_mappings if membership else {}
+            },
+            "my_stats": {
+                "tasks_assigned": my_total_tasks,
+                "tasks_completed": my_completed_tasks,
+                "completion_rate": round((my_completed_tasks / my_total_tasks * 100) if my_total_tasks > 0 else 0, 2),
+                "total_commits": my_total_commits,
+                "total_activities": my_total_activities,
+                "contribution_percentage": round(my_contribution_percentage, 2)
+            },
+            "my_tasks": my_tasks,
+            "my_commits": my_commits,
+            "my_activities": my_activities
+        }
+    )
+
 @router.get("/{project_id}/members")
 def get_project_members_stats(
     project_id: int,
@@ -473,25 +585,30 @@ def list_projects(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_or_organization)
 ):
-    # ✅ Use isinstance for robust type checking
-    # entity_type = getattr(current_user, 'entity_type', None)
-
-    print(f"DEBUG: list_projects current_user type: {type(current_user)}")
+    """List all projects accessible to the current user"""
 
     if isinstance(current_user, User):
+        # Get projects from user's organizations
         user_org_ids = [org.id for org in current_user.organizations]
-        projects = db.query(Project).filter(
-            Project.organization_id.in_(user_org_ids)
-        ).all()
+
+        # Get projects where user is a member OR project is in their org
+        projects = db.query(Project).outerjoin(ProjectMember).filter(
+            (Project.organization_id.in_(user_org_ids)) |
+            (ProjectMember.user_id == current_user.id)
+        ).distinct().all()
+
     elif isinstance(current_user, Organization):
         projects = db.query(Project).filter(
             Project.organization_id == current_user.id
         ).all()
     else:
-        print(f"ERROR: Invalid user type in list_projects: {type(current_user)}")
         raise HTTPException(status_code=403, detail=f"Invalid entity type: {type(current_user)}")
 
-    return [ProjectResponse.model_validate(project) for project in projects]
+    return create_response(
+        success=True,
+        message="Projects retrieved successfully",
+        data=[ProjectResponse.model_validate(project) for project in projects]
+    )
 
 
 

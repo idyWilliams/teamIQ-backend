@@ -68,7 +68,7 @@ class MLService:
             predictions.append({
                 "user_id": user.id,
                 "name": f"{user.first_name} {user.last_name}",
-                "avatar": user.profile_picture_url,
+                "avatar": user.profile_image,
                 "role": member.role,
                 "confidence_score": round(confidence, 1),
                 "explanation": explanation,

@@ -577,7 +577,7 @@ class DashboardService:
                 contributors.append({
                     "user_id": user.id,
                     "name": f"{user.first_name} {user.last_name}",
-                    "avatar": user.profile_picture_url,
+                    "avatar": user.profile_image,
                     "productivity_score": round(user_dash.productivity_score, 1),
                     "contributions": {
                         "commits": user_dash.commits_count,
