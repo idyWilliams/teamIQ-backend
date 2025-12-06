@@ -17,6 +17,13 @@ from app.repositories.org_integration_credential import get_org_credentials, ups
 
 router = APIRouter()
 
+def debug_log(msg):
+    try:
+        with open("/Users/mac/Documents/teamIQ-backend/debug_integration.log", "a") as f:
+            f.write(f"{datetime.utcnow()} - {msg}\n")
+    except Exception as e:
+        print(f"Failed to write debug log: {e}")
+
 # --------- Credential Logic ---------
 def resolve_creds(db, org_id, provider):
     """
@@ -137,9 +144,11 @@ async def get_account_id_from_provider(provider, access_token, api_key=None):
 # --------- Core Integration CRUD/API ---------
 @router.get("/")
 def list_integrations(org_id: str = Query(...), db: Session = Depends(get_db)):
+    debug_log(f"Listing integrations for org={org_id}")
     conns = db.query(IntegrationConnection).filter_by(
         organization_id=org_id, is_active=True
     ).all()
+    debug_log(f"Found {len(conns)} active integrations for org={org_id}")
     return [
         {
             "id": c.id,
@@ -160,6 +169,7 @@ def remove_integration(connection_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, detail="Integration not found")
     conn.is_active = False
     db.commit()
+    debug_log(f"Soft deleted integration {connection_id}")
     return {"success": True, "id": connection_id}
 
 @router.post("/{connection_id}/sync")
@@ -266,6 +276,7 @@ async def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
         except Exception:
             raise HTTPException(400, "Invalid state param structure")
 
+        debug_log(f"OAuth callback: state={state}, orgId={orgId}, provider={provider}")
         creds = resolve_creds(db, orgId, provider)
         payload = {
             "client_id": creds["client_id"],
@@ -292,6 +303,7 @@ async def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
                 raise HTTPException(400, f"No access token returned. GitHub response: {token_data}")
 
         account_id = await get_account_id_from_provider(provider, access_token)
+        debug_log(f"Got account_id={account_id} from provider={provider}")
         upsert_integration_connection(
             db, {
                 "organization_id": orgId,

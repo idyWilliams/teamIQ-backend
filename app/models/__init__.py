@@ -5,6 +5,7 @@ from .user import User
 from .organization import Organization
 from .integration import OrganizationIntegration, LinkedAccount, IntegrationConnection
 from .project import Project, ProjectMember
+from .project_resource import ProjectResource
 from .task import Task
 from .skill import Skill, UserSkill
 from .invitation import Invitation
@@ -27,6 +28,7 @@ __all__ = [
     "IntegrationConnection",
     "Project",
     "ProjectMember",
+    "ProjectResource",
     "Task",
     "Skill",
     "UserSkill",
