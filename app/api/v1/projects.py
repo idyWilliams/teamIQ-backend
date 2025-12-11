@@ -647,8 +647,9 @@ def list_projects(
         organization_name = project.organization.organization_name if project.organization else None
 
         # 4. Create the final response object
+        project_data = {k: v for k, v in project.__dict__.items() if k not in ['members', 'resources', 'organization', 'project_lead']}
         enriched_project = ProjectListItemResponse(
-            **project.__dict__,
+            **project_data,
             members=member_details,
             integrated_apps=app_details,
             project_lead_name=project_lead_name,
