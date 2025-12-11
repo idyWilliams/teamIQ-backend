@@ -18,9 +18,13 @@ from app.schemas.project import (
     ProjectCreate,
     ProjectCreate,
     ProjectResponse,
-    ProjectResourceCreate
+    ProjectResourceCreate,
+    ProjectListItemResponse, 
+    ProjectMemberDetail, 
+    IntegratedAppDetail
 )
 from app.models.project_resource import ProjectResource
+from app.models.integration import IntegrationConnection
 from app.core.encryption import encrypt_field
 from app.schemas.response_model import create_response, APIResponse
 from app.services.webhook_secret_generator import generate_github_webhook_secret, generate_jira_webhook_secret, generate_slack_signing_secret
@@ -29,6 +33,7 @@ from app.tasks.sync_scheduler import sync_single_project, get_scheduler_status
 from app.repositories import project_repository
 from app.schemas.user import UserOut
 from typing import List
+from sqlalchemy.orm import joinedload, subqueryload
 
 router = APIRouter()
 
@@ -580,34 +585,79 @@ def get_project(
 #         data=[ProjectResponse.model_validate(p) for p in projects]
 #     )
 
-@router.get("/")
+@router.get("/", response_model=APIResponse[List[ProjectListItemResponse]])
 def list_projects(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_or_organization)
 ):
-    """List all projects accessible to the current user"""
+    """
+    List all projects with enriched data (members, apps, lead, org).
+    Uses eager loading to prevent N+1 query problems.
+    """
+    query = db.query(Project).options(
+        subqueryload(Project.members).joinedload(ProjectMember.user),
+        subqueryload(Project.resources).joinedload(ProjectResource.connection),
+        joinedload(Project.organization),
+        joinedload(Project.project_lead)
+    )
 
     if isinstance(current_user, User):
-        # Get projects from user's organizations
         user_org_ids = [org.id for org in current_user.organizations]
-
-        # Get projects where user is a member OR project is in their org
-        projects = db.query(Project).outerjoin(ProjectMember).filter(
+        query = query.outerjoin(ProjectMember).filter(
             (Project.organization_id.in_(user_org_ids)) |
             (ProjectMember.user_id == current_user.id)
-        ).distinct().all()
-
+        )
     elif isinstance(current_user, Organization):
-        projects = db.query(Project).filter(
-            Project.organization_id == current_user.id
-        ).all()
+        query = query.filter(Project.organization_id == current_user.id)
     else:
         raise HTTPException(status_code=403, detail=f"Invalid entity type: {type(current_user)}")
+
+    projects = query.distinct().all()
+
+    enriched_projects = []
+    for project in projects:
+        # 1. Process members
+        member_details = [
+            ProjectMemberDetail(
+                id=member.id,
+                user_id=member.user.id,
+                user_name=f"{member.user.first_name} {member.user.last_name}",
+                user_email=member.user.email,
+                user_avatar=member.user.profile_picture,
+                role=member.role,
+                external_mappings=member.external_mappings
+            ) for member in project.members if member.user
+        ]
+
+        # 2. Process integrated apps
+        app_details = [
+            IntegratedAppDetail(
+                id=res.id,
+                resource_name=res.resource_name,
+                resource_type=res.resource_type,
+                provider=res.connection.provider,
+                connection_id=res.connection_id
+            ) for res in project.resources if res.connection
+        ]
+
+        # 3. Get lead and org names
+        project_lead_name = f"{project.project_lead.first_name} {project.project_lead.last_name}" if project.project_lead else None
+        organization_name = project.organization.name if project.organization else None
+
+        # 4. Create the final response object
+        enriched_project = ProjectListItemResponse(
+            **project.__dict__,
+            members=member_details,
+            integrated_apps=app_details,
+            project_lead_name=project_lead_name,
+            organization_name=organization_name
+        )
+        enriched_projects.append(enriched_project)
 
     return create_response(
         success=True,
         message="Projects retrieved successfully",
-        data=[ProjectResponse.model_validate(project) for project in projects]
+        data=enriched_projects
     )
 
 

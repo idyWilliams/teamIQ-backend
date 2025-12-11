@@ -186,3 +186,61 @@ class ProjectResourceResponse(BaseModel):
     resource_metadata: Optional[Dict] = None
 
     model_config = {"from_attributes": True}
+
+
+# Enhanced response schemas for list endpoint
+class ProjectMemberDetail(BaseModel):
+    """Enhanced member information including user details"""
+    id: int
+    user_id: int
+    user_name: str
+    user_email: str
+    user_avatar: Optional[str] = None
+    role: Optional[str] = None
+    external_mappings: Optional[Dict[str, str]] = None
+
+    model_config = {"from_attributes": True}
+
+
+class IntegratedAppDetail(BaseModel):
+    """Information about integrated apps/resources"""
+    id: int
+    resource_name: str
+    resource_type: str
+    provider: str
+    connection_id: int
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectListItemResponse(BaseModel):
+    """Enhanced project response for list endpoint with all related data"""
+    id: int
+    name: str
+    description: Optional[str]
+    owner_id: Optional[int]
+    organization_id: Optional[int]
+    project_lead_id: Optional[int]
+    stacks: Optional[List[str]] = None
+    start_date: Optional[datetime.datetime]
+    end_date: Optional[datetime.datetime]
+
+    # Integration details
+    pm_tool: Optional[str]
+    vc_tool: Optional[str]
+    comm_tool: Optional[str]
+
+    status: Optional[ProjectStatus] = None
+    pct_complete: float
+    is_visible: bool
+
+    createdAt: datetime.datetime
+    updatedAt: Optional[datetime.datetime] = None
+
+    # Enhanced fields
+    members: List[ProjectMemberDetail] = []
+    integrated_apps: List[IntegratedAppDetail] = []
+    project_lead_name: Optional[str] = None
+    organization_name: Optional[str] = None
+
+    model_config = {"from_attributes": True}
