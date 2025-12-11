@@ -644,7 +644,7 @@ def list_projects(
 
         # 3. Get lead and org names
         project_lead_name = f"{project.project_lead.first_name} {project.project_lead.last_name}" if project.project_lead else None
-        organization_name = project.organization.name if project.organization else None
+        organization_name = project.organization.organization_name if project.organization else None
 
         # 4. Create the final response object
         enriched_project = ProjectListItemResponse(
