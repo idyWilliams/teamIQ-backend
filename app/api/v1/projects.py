@@ -625,7 +625,7 @@ def list_projects(
                 user_id=member.user.id,
                 user_name=f"{member.user.first_name} {member.user.last_name}",
                 user_email=member.user.email,
-                user_avatar=member.user.profile_picture,
+                user_avatar=member.user.profile_image,
                 role=member.role,
                 external_mappings=member.external_mappings
             ) for member in project.members if member.user
