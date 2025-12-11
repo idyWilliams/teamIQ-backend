@@ -612,10 +612,12 @@ def list_projects(
     else:
         raise HTTPException(status_code=403, detail=f"Invalid entity type: {type(current_user)}")
 
-    projects = query.distinct().all()
+    projects = query.all()
+
+    unique_projects = {project.id: project for project in projects}.values()
 
     enriched_projects = []
-    for project in projects:
+    for project in unique_projects:
         # 1. Process members
         member_details = [
             ProjectMemberDetail(
