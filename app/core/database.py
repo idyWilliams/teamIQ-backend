@@ -17,14 +17,23 @@ engine = create_engine(
     echo=True,
     future=True,
     connect_args={
-        "sslmode": "require",
+        "sslmode": "prefer",
         "connect_timeout": 60
     },
+    use_native_hstore=False,
     pool_pre_ping=True,
     pool_recycle=1800,
     pool_timeout=30,
     max_overflow=10
 )
+
+# Debug logging for DB connection
+try:
+    from urllib.parse import urlparse
+    result = urlparse(DATABASE_URL)
+    print(f"DEBUG: Connecting to database at {result.hostname} (SSL: prefer)")
+except Exception as e:
+    print(f"DEBUG: Could not parse DATABASE_URL for logging: {e}")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
