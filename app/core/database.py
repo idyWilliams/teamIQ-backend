@@ -18,10 +18,16 @@ engine = create_engine(
     future=True,
     connect_args={
         "sslmode": "require",
-        "connect_timeout": 60
+        "connect_timeout": 60,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+        "gssencmode": "disable",
+        "sslcompression": 0
     },
     pool_pre_ping=True,
-    pool_recycle=3600,
+    pool_recycle=1800,
     pool_timeout=30,
     max_overflow=10
 )
