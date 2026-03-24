@@ -22,7 +22,7 @@ engine = create_engine(
     },
     use_native_hstore=False,
     pool_pre_ping=True,
-    pool_recycle=1800,
+   pool_recycle=300, 
     pool_timeout=30,
     max_overflow=10
 )
