@@ -385,6 +385,25 @@ async def send_organization_signup_email(email_to: str, organization_name: str):
         template_data={"organization_name": organization_name}
     )
 
+async def send_onboarding_complete_email(email_to: str, organization_name: str):
+    return await email_service.send_email(
+        to_email=email_to,
+        subject="🎉 Your TeamIQ Onboarding Is Complete",
+        template_name="emails/onboarding_complete.html",
+        template_data={"organization_name": organization_name}
+    )
+async def send_daily_digest(email_to: str, summary: str, name: str):
+    """Send summary of user or organization activity."""
+    return await email_service.send_email(
+        to_email=email_to,
+        subject="Your TeamIQ Daily Digest",
+        template_name="emails/daily_digest.html",
+        template_data={
+            "summary": summary,
+            "name": name
+        }
+    )
+
 async def send_generic_email(subject: str, email_to: str, content: str):
     """Simple HTML wrapper for generic notices"""
     html = f"<html><body><p>{content}</p></body></html>"
