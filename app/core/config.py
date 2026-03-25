@@ -79,8 +79,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL")
 
     # JWT
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "56370eec20b1bd95c31dd517764adfdb8d3e9a2772b13c902822f236014303f73267ab154a5af82d11e3c539371721c42e9eaa7aaaaaac47bc8b33b8533f5584")
-    ALGORITHM: str = "HS256"
+    SECRET_KEY: str = os.getenv("SECRET_KEY")
+    ALGORITHM: str = os.getenv("ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
     # OAuth
