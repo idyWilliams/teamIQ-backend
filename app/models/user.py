@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Enum, DateTime
+from sqlalchemy import Boolean, Column, Integer, String, Enum, DateTime
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.models.organization import UserRole
@@ -54,3 +54,7 @@ class User(Base):
     )
 
     stacks = relationship("Stack", secondary="user_stacks", back_populates="users")
+    dashboard = relationship("UserDashboard", back_populates="user", uselist=False)
+    onboarding_completed = Column(Boolean, default=False)
+    onboarding_step = Column(Integer, default=0) 
+    onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)

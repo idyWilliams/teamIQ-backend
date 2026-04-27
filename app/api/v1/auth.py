@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import Optional
 import datetime
 
 from app.core.database import get_db
+from app.models.organization import Organization
 from app.repositories import user_repository, organization_repository
-from app.repositories.invitation_repository import get_invitation_by_code, accept_invitation
+from app.repositories.invitation_repository import get_invitation_by_code
 from app.core.hashing import verify_password, get_password_hash
 from app.core.security import (
     create_access_token,
     create_reset_token,
+    get_current_user_or_organization,
     verify_reset_token,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
@@ -19,76 +20,37 @@ from app.schemas.response_model import create_response
 from app.repositories.user_org_repository import link_user_to_org
 # Schemas
 from app.schemas.user import UserCreate, UserOut
-from app.schemas.organization import OrganizationSignUp, OrganizationOut
+from app.schemas.organization import OrganizationOut
 from app.schemas.auth import Token, PasswordResetRequest, PasswordResetConfirm, LoginRequest
 
 router = APIRouter()
 
 
-# ----------------------------
-# USER REGISTRATION
-# ----------------------------
 
-
-# @router.post("/register/user")
-# def register_user(
-#     user: UserCreate,
-#     db: Session = Depends(get_db),
-#     invitation_code: str = Query(..., description="Invitation code is required for user registration")
-# ):
-#     invitation = get_invitation_by_code(db, invitation_code)
-#     if not invitation or invitation.is_used or invitation.expires_at < datetime.datetime.now(datetime.timezone.utc):
-#         raise HTTPException(status_code=400, detail="Invalid or expired invitation code")
-
-#     # Cannot register with an organization email
-#     existing_org = organization_repository.get_organization_by_email(db, user.email)
-#     if existing_org:
-#         raise HTTPException(status_code=400, detail="This email is registered to an organization")
-
-#     # Proceed
-#     existing_user = user_repository.get_user_by_email(db, user.email)
-#     if not existing_user:
-#         # Create a new user
-#         user_entity = user_repository.create_user(db, user)
-#         user_entity.organization_id = invitation.organization_id
-#         db.flush() # Assign an ID to the new user before linking
-#         link_user_to_org(db, user_entity.id, invitation.organization_id)
-#     else:
-#         # If user exists, check if they are already in the organization
-#         user_entity = existing_user
-#         user_orgs = {org.id for org in user_entity.organizations}
-#         if invitation.organization_id not in user_orgs:
-#             link_user_to_org(db, user_entity.id, invitation.organization_id)
-
-#     invitation.is_used = True
-#     db.commit()
-#     db.refresh(user_entity)
-
-#     token = create_access_token(data={"sub": user_entity.email})
-#     return create_response(
-#         success=True,
-#         message="User registration completed successfully",
-#         data=Token(
-#             access_token=token,
-#             token_type="bearer",
-#             user=UserOut.model_validate(user_entity)
-#         )
-#     )
 
 @router.post("/register/user")
 def register_user(
     user: UserCreate,
     db: Session = Depends(get_db),
-    invitation_code: str = Query(..., description="Invitation code is required for user registration")
+    invitation_code: str = Query(..., description="Invitation code is required")
 ):
     """
     Register a new user with an invitation code.
-    If user already exists, adds them to the invited organization.
+    Links user to organization via many-to-many relationship.
     """
-    # Validate invitation code
+    # Validate invitation
     invitation = get_invitation_by_code(db, invitation_code)
-    if not invitation or invitation.is_used or invitation.expires_at < datetime.datetime.now(datetime.timezone.utc):
-        raise HTTPException(status_code=400, detail="Invalid or expired invitation code")
+    if not invitation:
+        raise HTTPException(status_code=400, detail="Invalid invitation code")
+
+    if invitation.is_used:
+        raise HTTPException(status_code=400, detail="This invitation has already been used")
+
+    if invitation.expires_at < datetime.datetime.now(datetime.timezone.utc):
+        # Update status to expired before raising error
+        invitation.status = "expired"
+        db.commit()
+        raise HTTPException(status_code=400, detail="This invitation has expired. Please request a new invitation.")
 
     # Prevent registration with organization email
     existing_org = organization_repository.get_organization_by_email(db, user.email)
@@ -100,52 +62,56 @@ def register_user(
 
     if not existing_user:
         # === NEW USER REGISTRATION ===
-
-        # Create user (not committed yet)
         user_entity = user_repository.create_user(
             db=db,
-            user=user,
-            organization_id=invitation.organization_id
+            user=user
+            # organization_id removed - not needed for many-to-many
         )
 
-        # Flush to assign ID to user_entity before using it in foreign key
+        # Flush to assign ID
         db.flush()
 
-        # Now user_entity.id is available - link to organization
+        # Link user to organization via many-to-many
         link_user_to_org(db, user_entity.id, invitation.organization_id)
 
     else:
         # === EXISTING USER - ADD TO NEW ORGANIZATION ===
-
         user_entity = existing_user
-
-        # Update primary organization if not set
-        if not user_entity.organization_id:
-            user_entity.organization_id = invitation.organization_id
 
         # Check if already linked to this organization
         user_orgs = {org.id for org in user_entity.organizations}
 
-        if invitation.organization_id not in user_orgs:
-            # Link existing user to the new organization
-            # user_entity.id already exists, no need to flush
-            link_user_to_org(db, user_entity.id, invitation.organization_id)
+        if invitation.organization_id in user_orgs:
+            raise HTTPException(
+                status_code=400,
+                detail="You are already a member of this organization"
+            )
 
-    # Mark invitation as used
+        link_user_to_org(db, user_entity.id, invitation.organization_id)
+
+    # ⚠️ UPDATED: Properly mark invitation as accepted
     invitation.is_used = True
+    invitation.accepted = True
+    invitation.accepted_at = datetime.datetime.now(datetime.timezone.utc)
+    invitation.status = "accepted"
 
-    # Commit all changes as a single transaction
+    # Commit transaction
     db.commit()
-
-    # Refresh to load all relationships and updated fields
     db.refresh(user_entity)
 
-    # Fetch organization details
-    organization = organization_repository.get_organization_by_id(db, user_entity.organization_id)
-    organization_out = OrganizationOut.model_validate(organization)
+    # Get user's primary organization (first one they joined)
+    primary_org = user_entity.organizations[0] if user_entity.organizations else None
 
-    # Generate access token
-    token = create_access_token(data={"sub": user_entity.email}, entity_type="user")
+    if not primary_org:
+        raise HTTPException(status_code=500, detail="User has no organization")
+
+    organization_out = OrganizationOut.model_validate(primary_org)
+
+    # Generate token
+    token = create_access_token(
+        data={"sub": user_entity.email},
+        entity_type="user"
+    )
 
     return create_response(
         success=True,
@@ -154,55 +120,21 @@ def register_user(
             access_token=token,
             token_type="bearer",
             user=UserOut.model_validate(user_entity),
-            organization=organization_out
+            onboarding_completed=False,
+            organization=organization_out,
         )
     )
 
-
-# ----------------------------
-# ORGANIZATION REGISTRATION
-# ----------------------------
-# @router.post("/register/organization")
-# def register_organization(org: OrganizationSignUp, db: Session = Depends(get_db)):
-#     if organization_repository.get_organization_by_name(db, org.organization_name):
-#         raise HTTPException(status_code=400, detail="Organization name already registered")
-
-#     if organization_repository.get_organization_by_email(db, org.email):
-#         raise HTTPException(status_code=400, detail="Email already registered")
-
-#     hashed_password = get_password_hash(org.password)
-
-#     new_org = organization_repository.create_organization(
-#         db=db,
-#         org_data={
-#             "organization_name": org.organization_name,
-#             "team_size": org.team_size,
-#             "email": org.email,
-#             "country": org.country,
-#             "hashed_password": hashed_password,
-#             "role": "organization"
-#         }
-#     )
-#     db.commit()
-#     db.refresh(new_org)
-
-#     access_token = create_access_token(data={"sub": new_org.email})
-#     org_out = OrganizationOut.model_validate(new_org)
-
-#     return create_response(
-#         success=True,
-#         message="Organization registered successfully",
-#         data=Token(
-#             access_token=access_token,
-#             token_type="bearer",
-#             organization=org_out
-#         )
-#     )
 
 
 # ----------------------------
 # LOGIN
 # ----------------------------
+@router.options("/login")
+def login_options():
+    """Handle CORS preflight for login endpoint"""
+    return {"status": "ok"}
+
 @router.post("/login")
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     # Normalize email
@@ -268,7 +200,7 @@ async def request_password_reset(request: PasswordResetRequest, background_tasks
     return create_response(
         success=True,
         message="Reset email sent",
-        data={"reset_link": reset_link}
+        # data={"reset_link": reset_link}
     )
 
 
@@ -291,14 +223,45 @@ def confirm_password_reset(confirm: PasswordResetConfirm, db: Session = Depends(
         hashed_pw = get_password_hash(confirm.new_password)
         user_obj.hashed_password = hashed_pw
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
-        # In a real-world app, you'd want to log this error.
-        # from app.core.logger import logger
-        # logger.error(f"Error during password reset confirmation: {e}")
+
         raise HTTPException(
             status_code=500,
             detail="An error occurred while updating the password. Please try again."
         )
 
     return create_response(success=True, message="Password reset successful")
+
+
+
+@router.post("/logout")
+def logout(
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Logout endpoint
+
+    In token-based auth, logout is handled client-side by:
+    1. Removing token from localStorage/cookies
+    2. Optional: Add token to blacklist (implement if needed)
+
+    This endpoint can be used to log the logout event
+    """
+    from datetime import datetime
+
+    user_type = "organization" if isinstance(current_user, Organization) else "user"
+    user_id = current_user.id
+
+    # Log logout event (optional)
+    print(f"[LOGOUT] {user_type.upper()} ID {user_id} logged out at {datetime.utcnow()}")
+
+    return create_response(
+        success=True,
+        message="Logged out successfully. Please remove token from client.",
+        data={
+            "user_type": user_type,
+            "user_id": user_id,
+            "logged_out_at": datetime.utcnow().isoformat()
+        }
+    )

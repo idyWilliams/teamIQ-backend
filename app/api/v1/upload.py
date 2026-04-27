@@ -5,7 +5,6 @@ from app.services.storage_service import upload_image_to_supabase
 from app.core.security import get_current_user_or_organization
 from app.models.user import User
 from app.models.organization import Organization
-from typing import Optional, Union
 from enum import Enum
 
 router = APIRouter()

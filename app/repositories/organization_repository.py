@@ -6,7 +6,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-from app.models.organization import Organization
 
 def create_organization(db, org_data: dict):
     """

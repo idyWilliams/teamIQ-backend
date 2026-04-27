@@ -1,15 +1,80 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
+from datetime import datetime
 from app.models.user import User
 from app.models.organization import Organization, UserRole
 from app.schemas.user import UserOut, UserUpdate
 from app.repositories import user_repository
 from app.core.database import get_db
-from app.schemas.response_model import create_response
+# from app.schemas.response_model import create_response
+from app.schemas.response_model import create_response, APIResponse
+
 from app.core.dependencies import get_current_user_and_update_last_seen
+from app.schemas.project import ProjectResponse
+from typing import List
 
 
 router = APIRouter()
+
+
+@router.get("/me/projects", response_model=APIResponse[List[ProjectResponse]])
+def get_my_projects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_and_update_last_seen)
+):
+    """
+    Get all projects the current user is a member of.
+    """
+    if not isinstance(current_user, User):
+        raise HTTPException(status_code=403, detail="This endpoint is for users only.")
+
+    projects = user_repository.get_projects_for_user(db, user_id=current_user.id)
+    return create_response(
+        success=True,
+        message="Projects retrieved successfully",
+        data=[ProjectResponse.model_validate(p) for p in projects]
+    )
+
+
+@router.get("/me/organizations")
+def get_my_organizations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_and_update_last_seen)
+):
+    """
+    Get all organizations the current user is a member of.
+    """
+    if not isinstance(current_user, User):
+        raise HTTPException(status_code=403, detail="This endpoint is for users only.")
+
+    orgs = current_user.organizations
+    return create_response(
+        success=True,
+        message="User organizations retrieved successfully",
+        data=[{"id": org.id, "organization_name": org.organization_name, "email": org.email, "organization_image": org.organization_image} for org in orgs]
+    )
+
+
+# @router.get("/organization/users")
+# def read_organization_users(
+#     db: Session = Depends(get_db),
+#     current_user = Depends(get_current_user_and_update_last_seen)
+# ):
+#     """
+#     Get all users for the authenticated organization.
+#     Only accessible by organizations.
+#     """
+#     if not isinstance(current_user, Organization):
+#         raise HTTPException(status_code=403, detail="Only organizations can access this endpoint")
+
+#     users = user_repository.get_users_by_organization(db, organization_id=current_user.id)
+#     users_out = [UserOut.model_validate(user) for user in users]
+
+#     return create_response(
+#         success=True,
+#         message="Users retrieved successfully",
+#         data=[user.model_dump() for user in users_out]
+#     )
 
 
 @router.get("/organization/users")
@@ -21,7 +86,9 @@ def read_organization_users(
     Get all users for the authenticated organization.
     Only accessible by organizations.
     """
-    if not isinstance(current_user, Organization):
+    entity_type = getattr(current_user, 'entity_type', None)
+
+    if entity_type != "organization":
         raise HTTPException(status_code=403, detail="Only organizations can access this endpoint")
 
     users = user_repository.get_users_by_organization(db, organization_id=current_user.id)
@@ -51,8 +118,8 @@ def read_organization_user_by_id(
     # Get the user from the organization
     db_user = (
         db.query(User)
-        .options(joinedload(User.organization))
-        .filter(User.id == user_id, User.organization_id == current_user.id)
+        .join(User.organizations)
+        .filter(User.id == user_id, Organization.id == current_user.id)
         .first()
     )
 
@@ -79,14 +146,15 @@ def read_user(
     - Users can view their own profile
     - Mentors can view any user profile
     """
-    db_user = db.query(User).options(joinedload(User.organization)).filter(User.id == user_id).first()
+    db_user = db.query(User).filter(User.id == user_id).first()
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Authorization check
     if isinstance(current_user, Organization):
         # Organization can only view users that belong to them
-        if db_user.organization_id != current_user.id:
+        is_member = any(org.id == current_user.id for org in db_user.organizations)
+        if not is_member:
             raise HTTPException(status_code=403, detail="Access denied: User does not belong to your organization")
 
     elif isinstance(current_user, User):
@@ -138,6 +206,11 @@ def update_profile(
     for field, value in update_data.items():
         setattr(db_user, field, value)
 
+    # Mark onboarding as complete
+    if not db_user.onboarding_completed:
+        db_user.onboarding_completed = True
+        db_user.onboarding_completed_at = datetime.utcnow()
+
     db.commit()
     db.refresh(db_user)
 
@@ -154,6 +227,10 @@ def get_user_organizations(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_and_update_last_seen)
 ):
+    # Authorization check
+    if isinstance(current_user, User) and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     user = user_repository.get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

@@ -1,12 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from pathlib import Path
 from app.core.database import Base, engine
+from app.tasks.sync_scheduler import start_scheduler, stop_scheduler
+from datetime import datetime
 
-# Import all route modules
 from app.api.v1 import (
     auth,
+    chat,
     users,
     organizations,
     projects,
@@ -16,10 +19,13 @@ from app.api.v1 import (
     invitations,
     skills,
     notifications,
-    upload
+    upload,
+    webhooks,
+    ml,
+    user_mappings
 )
 
-# Logger setup
+# Logger
 import logging
 from pythonjsonlogger import jsonlogger
 
@@ -35,13 +41,33 @@ formatter = jsonlogger.JsonFormatter()
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for startup and shutdown events
+    """
+    # Startup: Start the integration sync scheduler
+    print("🚀 Starting FastAPI application...")
+    start_scheduler()
+    print("✅ Integration sync scheduler is running")
+
+    yield
+
+    # Shutdown: Stop the scheduler gracefully
+    print("🛑 Shutting down application...")
+    stop_scheduler()
+    print("✅ Integration sync scheduler stopped")
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="TeamIQ Backend",
     description="Backend API for TeamIQ Project Management Platform",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS Middleware
@@ -49,16 +75,20 @@ origins = [
     "http://localhost",
     "http://localhost:3000",
     "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3003",
     "http://localhost:8000",
     "https://team-iq-frontend.vercel.app",
+    "https://teamiq-backend.onrender.com",
 ]
 
 app.add_middleware(
-    CORSMiddleware,
+ CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Database initialization
@@ -71,21 +101,53 @@ def on_startup():
     except Exception as e:
         logger.error(f"Error creating tables on startup: {e}")
 
-# Root
+
+# Root endpoint with LIVE scheduler status
 @app.get("/", tags=["Health"])
 def root():
     """Root endpoint - Health check"""
+
+    from app.tasks.sync_scheduler import get_scheduler_status
+
+    try:
+        scheduler_status = get_scheduler_status()
+    except Exception as e:
+        scheduler_status = {"error": str(e), "running": False}
+
     return {
         "status": "healthy",
         "message": "TeamIQ Backend API is running",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "timestamp": datetime.now().isoformat(),
+        "scheduler": scheduler_status
     }
 
-# Test
+
+# Test CORS
 @app.get("/test-cors", tags=["Health"])
 def test_cors():
     """Test CORS configuration"""
     return {"message": "CORS test successful"}
+
+
+# Health check endpoint
+@app.get("/health", tags=["Health"])
+def health_check():
+    """Detailed health check with scheduler status"""
+    from app.tasks.sync_scheduler import get_scheduler_status
+
+    try:
+        scheduler_status = get_scheduler_status()
+    except Exception as e:
+        scheduler_status = {"error": str(e), "running": False}
+
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "database": "connected",
+        "scheduler": scheduler_status
+    }
+
 
 # Include all routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
@@ -99,8 +161,24 @@ app.include_router(invitations.router, prefix="/api/v1/invitations", tags=["Invi
 app.include_router(skills.router, prefix="/api/v1/skills", tags=["Skills"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
+app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["Webhooks"])
+app.include_router(
+    ml.router,
+    prefix="/api/v1/ml",
+    tags=["ML & Predictions"])
+app.include_router(
+    chat.router,
+    prefix="/api/v1/chat",
+    tags=["AI Chat"]
+)
+app.include_router(
+    user_mappings.router,
+    prefix="/api/v1/user-mappings",
+    tags=["User Mappings"]
+)
 
-# Error handler
+
+# Global error handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler to catch all unhandled exceptions."""

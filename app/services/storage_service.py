@@ -4,16 +4,21 @@ from app.core.config import settings
 import uuid
 from datetime import datetime
 
-# Initialize Supabase client
-supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
-async def upload_image_to_supabase(file: UploadFile, folder: str = "uploads") -> str:
+
+supabase: Client = create_client(
+    settings.SUPABASE_URL,
+    settings.SUPABASE_SERVICE_ROLE_KEY  
+)
+
+
+async def upload_image_to_supabase(file: UploadFile, folder: str = "general") -> str:
     """
     Upload image to Supabase Storage and return public URL
 
     Args:
         file: The uploaded file from FastAPI
-        folder: Folder name in the bucket (e.g., 'profiles', 'organizations')
+        folder: Folder name in the bucket (e.g., 'profiles', 'organizations', 'projects')
 
     Returns:
         str: Public URL of the uploaded image
@@ -45,7 +50,11 @@ async def upload_image_to_supabase(file: UploadFile, folder: str = "uploads") ->
         response = supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).upload(
             path=unique_filename,
             file=file_content,
-            file_options={"content-type": file.content_type}
+            file_options={
+                "content-type": file.content_type,
+                "cache-control": "3600",
+                "upsert": "false"  # Prevent overwriting
+            }
         )
 
         # Get public URL
@@ -72,10 +81,10 @@ async def delete_image_from_supabase(image_url: str) -> bool:
         bool: True if deletion successful
     """
     try:
-        # Extract file path from URL
-        # URL format: https://xxx.supabase.co/storage/v1/object/public/bucket-name/path/to/file.jpg
+
         parts = image_url.split(f"{settings.SUPABASE_BUCKET_NAME}/")
         if len(parts) < 2:
+            print(f"⚠️  Invalid URL format: {image_url}")
             return False
 
         file_path = parts[1]
@@ -84,6 +93,30 @@ async def delete_image_from_supabase(image_url: str) -> bool:
         supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).remove([file_path])
         print(f"🗑️ Image deleted: {file_path}")
         return True
+
     except Exception as e:
         print(f"❌ Delete error: {str(e)}")
         return False
+
+
+async def get_signed_url(file_path: str, expires_in: int = 3600) -> str:
+    """
+    Get a signed URL for private file access
+
+    Args:
+        file_path: Path to file in bucket
+        expires_in: URL expiration time in seconds (default 1 hour)
+
+    Returns:
+        str: Signed URL
+    """
+    try:
+        signed_url = supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).create_signed_url(
+            path=file_path,
+            expires_in=expires_in
+        )
+        return signed_url['signedURL']
+
+    except Exception as e:
+        print(f"❌ Signed URL error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create signed URL: {str(e)}")

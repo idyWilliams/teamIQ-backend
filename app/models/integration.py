@@ -1,96 +1,52 @@
-# app/models/integration.py
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, JSON, Text, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
-import datetime
-import enum
+from datetime import datetime
 
 
-class AuthMethod(str, enum.Enum):
-    OAUTH2 = "oauth2"
-    API_KEY = "api_key"
-    API_TOKEN = "api_token"
-    BOT_TOKEN = "bot_token"
-    PERSONAL_ACCESS_TOKEN = "personal_access_token"
-
-
-class IntegrationType(str, enum.Enum):
-    # Project Management
-    JIRA = "jira"
-    LINEAR = "linear"
-    CLICKUP = "clickup"
-    ASANA = "asana"
-
-    # Version Control
-    GITHUB = "github"
-    GITLAB = "gitlab"
-    BITBUCKET = "bitbucket"
-
-    # Communication
-    SLACK = "slack"
-    DISCORD = "discord"
-    TEAMS = "teams"
+class IntegrationConnection(Base):
+    __tablename__ = "integration_connections"
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(String, index=True)
+    provider = Column(String, index=True)
+    account_id = Column(String, index=True)
+    access_token = Column(String, nullable=True)
+    refresh_token = Column(String, nullable=True)
+    api_key = Column(String, nullable=True)
+    connected_by_user_id = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
 
 
 class OrganizationIntegration(Base):
-    """
-    Store organization-wide integration credentials.
-    This is set up ONCE per organization, then reused for all projects.
-    """
+    """Model for organization integrations - REQUIRED by Organization model"""
     __tablename__ = "organization_integrations"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
-
-    # Integration details
-    integration_type = Column(String, nullable=False)  # jira, github, slack, etc.
-    integration_name = Column(String, nullable=True)  # Display name
-
-    # Authentication
-    auth_method = Column(Enum(AuthMethod), nullable=False)
-
-    # OAuth 2.0 tokens
-    access_token = Column(Text, nullable=True)
-    refresh_token = Column(Text, nullable=True)
-    token_expires_at = Column(DateTime, nullable=True)
-
-    # API Keys/Tokens
-    api_key = Column(Text, nullable=True)
-    api_token = Column(Text, nullable=True)
-
-    # Tool-specific config
-    base_url = Column(String, nullable=True)  # For self-hosted instances
-    workspace_id = Column(String, nullable=True)
-    workspace_name = Column(String, nullable=True)
-    team_id = Column(String, nullable=True)
-
-    # Additional metadata
-    config = Column(JSON, nullable=True)  # Tool-specific configuration
-    scopes = Column(JSON, nullable=True)  # OAuth scopes
-
-    # Status
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    integration_type = Column(String, nullable=False)
+    integration_name = Column(String, nullable=True)
+    config = Column(JSON, nullable=True)
     is_active = Column(Boolean, default=True)
-    last_verified = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Setup tracking
-    setup_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-
-    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
-    updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
+    # Relationship back to Organization
     organization = relationship("Organization", back_populates="integrations")
-    setup_by = relationship("User")
 
-
-from sqlalchemy.sql import func
 
 class LinkedAccount(Base):
+    """Model for linked third-party accounts"""
     __tablename__ = "linked_accounts"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
-    provider = Column(String, nullable=False) # e.g., "github", "slack"
-    provider_id = Column(String, nullable=False, unique=True) # e.g., github user login
-    createdAt = Column(DateTime(timezone=True), server_default=func.now())
-    updatedAt = Column(DateTime(timezone=True), onupdate=func.now())
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    provider = Column(String, nullable=False)
+    provider_user_id = Column(String, nullable=False)
+    access_token = Column(String, nullable=True)
+    refresh_token = Column(String, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

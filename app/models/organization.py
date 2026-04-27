@@ -1,17 +1,20 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, JSON
 from sqlalchemy.types import Enum as SQLEnum
 from app.core.database import Base
 from enum import Enum as PyEnum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
+
 class UserRole(PyEnum):
     INTERN = "intern"
     MENTOR = "mentor"
     ORGANIZATION = "organization"
 
+
 class Organization(Base):
     __tablename__ = "organizations"
+
     id = Column(Integer, primary_key=True, index=True)
     organization_name = Column(String, unique=True, nullable=False)
     team_size = Column(String, nullable=False)
@@ -30,15 +33,25 @@ class Organization(Base):
     website = Column(String, nullable=True)
     country = Column(String, nullable=True)
     phone_number = Column(String, nullable=True)
-    # users = relationship("User", back_populates="organization")
+    onboarding_completed = Column(Boolean, default=False)
+    onboarding_step = Column(Integer, default=0)
+    onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)
+
     createdAt = Column(DateTime(timezone=True), server_default=func.now())
-    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Fixed: Added server_default for INSERT
+    updatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
     users = relationship(
         "User",
         secondary="user_organizations",
         back_populates="organizations"
     )
-    # Projects belonging to this organization (matches Project.organization.back_populates)
+
+    # Projects belonging to this organization
     projects = relationship("Project", back_populates="organization")
 
-    integrations = relationship("OrganizationIntegration", back_populates="organization")
+    # Integrations relationship (FIXED - now properly defined)
+    integrations = relationship("OrganizationIntegration", back_populates="organization", cascade="all, delete-orphan")
+
+    # Dashboard relationship
+    dashboard = relationship("OrganizationDashboard", back_populates="organization", uselist=False)

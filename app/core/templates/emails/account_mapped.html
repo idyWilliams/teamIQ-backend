@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>🔗 Account Mapping Notification</h2>
+
+<p>Hi {{ user_name }},</p>
+
+<p>
+  You've been mapped to a <strong>{{ provider }}</strong> account in the project <strong>{{ project_name }}</strong>.
+</p>
+
+<div style="background-color: #f0f7ff; border-left: 4px solid #0052CC; padding: 16px; margin: 24px 0; border-radius: 4px;">
+  <p style="margin: 0; font-weight: 600; color: #0052CC;">Mapped Account Details:</p>
+  <p style="margin: 8px 0 0 0; font-size: 14px;">
+    <strong>Provider:</strong> {{ provider }}<br>
+    <strong>Username:</strong> {{ external_username }}<br>
+    <strong>Mapped by:</strong> {{ mapped_by }}
+  </p>
+</div>
+
+<p>
+  This mapping allows TeamIQ to sync your tasks, commits, and activities from {{ provider }} automatically.
+  Your work will now be properly attributed to you in the project dashboard.
+</p>
+
+<p style="margin-top: 24px;">
+  <strong>What this means:</strong>
+</p>
+<ul style="margin: 8px 0 16px 20px; line-height: 1.8;">
+  <li>Tasks assigned to <strong>{{ external_username }}</strong> on {{ provider }} will appear in your TeamIQ dashboard</li>
+  <li>Your contributions will be tracked and synced automatically</li>
+  <li>You'll receive notifications for updates from {{ provider }}</li>
+</ul>
+
+<p style="margin-top: 24px; padding: 16px; background-color: #fff9e6; border-radius: 4px; border-left: 4px solid #ffc107;">
+  <strong>⚠️ Not your account?</strong><br>
+  If this {{ provider }} account doesn't belong to you, please contact your project administrator or unmap it from your TeamIQ settings.
+</p>
+
+<a href="{{ app_url }}/projects" class="cta-button">View Project Dashboard</a>
+
+<p style="margin-top: 32px; font-size: 14px; color: #666;">
+  If you have any questions, feel free to reach out to your project administrator.
+</p>
+{% endblock %}

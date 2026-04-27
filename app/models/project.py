@@ -40,6 +40,7 @@ class Project(Base):
     pm_project_id = Column(String, nullable=True)
     pm_api_key = Column(String, nullable=True)
     pm_access_token = Column(String, nullable=True)
+    pm_workspace_url = Column(String, nullable=True)
 
     # Step 3: Version Control
     vc_tool = Column(String, nullable=True)
@@ -80,6 +81,9 @@ class Project(Base):
 
     organization = relationship("Organization", back_populates="projects")
     members = relationship("ProjectMember", back_populates="project")
+    tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
+    activities = relationship("Activity", back_populates="project")
+    resources = relationship("ProjectResource", back_populates="project", cascade="all, delete-orphan")
 
 
 class ProjectMember(Base):
@@ -89,8 +93,11 @@ class ProjectMember(Base):
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     role = Column(String, nullable=True)
+    external_mappings = Column(JSON, nullable=True)
 
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
 
     project = relationship("Project", back_populates="members")
     user = relationship("User")
+
+
