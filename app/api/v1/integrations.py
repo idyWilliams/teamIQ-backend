@@ -13,6 +13,7 @@ from app.models.integration import IntegrationConnection
 from app.models.org_integration_credential import OrgIntegrationCredential
 from app.repositories.integration import upsert_integration_connection
 from app.repositories.org_integration_credential import get_org_credentials, upsert_org_credentials
+from app.repositories.integration import get_slack_bot_token
 
 
 router = APIRouter()
@@ -452,6 +453,41 @@ def get_provider_credentials(
         "client_id": cred.client_id,
         "client_secret": None
     }
+
+
+# --------- Slack-Specific Endpoints ---------
+@router.get("/slack/channels")
+async def get_slack_channels(orgId: str = Query(...), db: Session = Depends(get_db)):
+    """
+    Fetch list of Slack channels for the organization.
+    Returns 400 if no Slack integration is connected.
+    """
+    token = get_slack_bot_token(db, orgId)
+
+    if not token:
+        return {"error": "No Slack integration found for this organization", "code": "no_integration"}
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://slack.com/api/conversations.list",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"types": "public_channel,private_channel", "exclude_archived": "true"}
+        )
+
+        if resp.status_code != 200:
+            debug_log(f"Slack API error: {resp.status_code} - {resp.text}")
+            raise HTTPException(resp.status_code, f"Slack API error: {resp.text}")
+
+        data = resp.json()
+        debug_log(f"Slack conversations.list response: {data}")
+
+        if not data.get("ok"):
+            error_msg = data.get("error", "unknown_error")
+            debug_log(f"Slack API returned error: {error_msg}")
+            return {"error": f"Slack API error: {error_msg}", "code": error_msg}
+
+        channels = data.get("channels", [])
+        return {"channels": [{"id": c["id"], "name": c["name"], "is_private": c.get("is_private", False)} for c in channels]}
 
 @router.post("/provider-credentials")
 def set_provider_credentials(

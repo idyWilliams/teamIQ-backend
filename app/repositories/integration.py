@@ -12,6 +12,15 @@ def get_org_provider_connections(db, org_id, provider):
     return db.query(IntegrationConnection)\
         .filter_by(organization_id=org_id, provider=provider, is_active=True).all()
 
+def get_slack_bot_token(db, org_id: str) -> str | None:
+    """
+    Returns the Slack access_token for the given org, or None if not found.
+    """
+    conn = db.query(IntegrationConnection).filter_by(
+        organization_id=org_id, provider="slack", is_active=True
+    ).first()
+    return conn.access_token if conn else None
+
 def upsert_integration_connection(db, data):
     org_id = str(data['organization_id'])
     provider = data['provider']
