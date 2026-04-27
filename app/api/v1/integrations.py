@@ -266,6 +266,86 @@ def oauth_start(provider: str, orgId: str, db: Session = Depends(get_db)):
     url = f"{creds['authorize_url']}?{urlencode(params)}"
     return RedirectResponse(url)
 
+@router.get("/oauth/callback/slack")
+async def oauth_callback_slack(code: str, state: str, db: Session = Depends(get_db)):
+    """
+    Slack OAuth callback - handles oauth.v2.access response format.
+    """
+    frontend_url = os.getenv("FRONTEND_URL", "https://team-iq-frontend.vercel.app")
+
+    try:
+        # Parse state to get orgId and provider
+        try:
+            orgId, provider = state.split(":")
+        except Exception:
+            raise HTTPException(400, "Invalid state parameter")
+
+        debug_log(f"Slack OAuth callback: state={state}, orgId={orgId}")
+
+        # Get Slack credentials
+        creds = resolve_creds(db, orgId, "slack")
+
+        # Call Slack oauth.v2.access endpoint
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://slack.com/api/oauth.v2.access",
+                data={
+                    "client_id": creds["client_id"],
+                    "client_secret": creds["client_secret"],
+                    "code": code,
+                    "redirect_uri": creds["redirect_uri"],
+                }
+            )
+
+            if resp.status_code != 200:
+                raise HTTPException(400, f"Slack token exchange failed: {resp.text}")
+
+            token_data = resp.json()
+
+            if not token_data.get("ok"):
+                error_msg = token_data.get("error", "unknown_error")
+                raise HTTPException(400, f"Slack error: {error_msg}")
+
+            # Extract team info and tokens from Slack response
+            team_info = token_data.get("team", {})
+            team_id = team_info.get("id")
+            access_token = token_data.get("access_token")
+            refresh_token = token_data.get("refresh_token")
+
+            if not team_id:
+                raise HTTPException(400, "No team ID returned from Slack")
+
+            if not access_token:
+                raise HTTPException(400, "No access token returned from Slack")
+
+            debug_log(f"Slack OAuth success: team_id={team_id}")
+
+        # Upsert the integration connection
+        upsert_integration_connection(
+            db, {
+                "organization_id": orgId,
+                "provider": "slack",
+                "account_id": team_id,
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "connected_by_user_id": team_id
+            }
+        )
+
+        # Redirect to frontend on success
+        frontend_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=success"
+        return RedirectResponse(frontend_redirect)
+
+    except HTTPException as e:
+        print(f"Slack OAuth callback HTTP error: {e.detail}")
+        error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=error&reason={e.detail}"
+        return RedirectResponse(error_redirect)
+    except Exception as e:
+        print(f"Slack OAuth callback unexpected error: {str(e)}")
+        error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=error&reason=internal_error"
+        return RedirectResponse(error_redirect)
+
+
 @router.get("/oauth/callback")
 async def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
     frontend_url = os.getenv("FRONTEND_URL", "https://team-iq-frontend.vercel.app")
