@@ -271,19 +271,19 @@ def oauth_start(provider: str, orgId: str, db: Session = Depends(get_db)):
 async def oauth_callback_slack(code: str, state: str, db: Session = Depends(get_db)):
     """
     Slack OAuth callback - handles oauth.v2.access response format.
+    Follows the same pattern as GitHub OAuth callback.
     """
     frontend_url = os.getenv("FRONTEND_URL", "https://team-iq-frontend.vercel.app")
 
     try:
-        # Parse state to get orgId and provider
         try:
             orgId, provider = state.split(":")
         except Exception:
-            raise HTTPException(400, "Invalid state parameter")
+            raise HTTPException(400, "Invalid state param structure")
 
-        debug_log(f"Slack OAuth callback: state={state}, orgId={orgId}")
+        debug_log(f"Slack OAuth callback: state={state}, orgId={orgId}, provider={provider}")
 
-        # Get Slack credentials
+        # Get Slack credentials using the same resolve_creds helper as GitHub
         creds = resolve_creds(db, orgId, "slack")
 
         # Call Slack oauth.v2.access endpoint
@@ -297,14 +297,17 @@ async def oauth_callback_slack(code: str, state: str, db: Session = Depends(get_
                     "redirect_uri": creds["redirect_uri"],
                 }
             )
+            debug_log(f"Slack token exchange response status: {resp.status_code}")
+            debug_log(f"Slack token exchange response body: {resp.text}")
 
             if resp.status_code != 200:
-                raise HTTPException(400, f"Slack token exchange failed: {resp.text}")
+                raise HTTPException(400, f"Failed token exchange: {resp.text}")
 
             token_data = resp.json()
 
             if not token_data.get("ok"):
                 error_msg = token_data.get("error", "unknown_error")
+                debug_log(f"Slack OAuth error: {error_msg}")
                 raise HTTPException(400, f"Slack error: {error_msg}")
 
             # Extract team info and tokens from Slack response
@@ -314,14 +317,16 @@ async def oauth_callback_slack(code: str, state: str, db: Session = Depends(get_
             refresh_token = token_data.get("refresh_token")
 
             if not team_id:
+                debug_log("Slack OAuth: No team ID returned")
                 raise HTTPException(400, "No team ID returned from Slack")
 
             if not access_token:
+                debug_log("Slack OAuth: No access token returned")
                 raise HTTPException(400, "No access token returned from Slack")
 
             debug_log(f"Slack OAuth success: team_id={team_id}")
 
-        # Upsert the integration connection
+        # Upsert using the same repository function as GitHub
         upsert_integration_connection(
             db, {
                 "organization_id": orgId,
@@ -333,16 +338,18 @@ async def oauth_callback_slack(code: str, state: str, db: Session = Depends(get_
             }
         )
 
-        # Redirect to frontend on success
+        # Success - redirect to frontend (same pattern as GitHub)
         frontend_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=success"
         return RedirectResponse(frontend_redirect)
 
     except HTTPException as e:
-        print(f"Slack OAuth callback HTTP error: {e.detail}")
+        # Handle HTTP exceptions with user-friendly error page (same as GitHub)
+        print(f"Slack OAuth callback error: {e.detail}")
         error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=error&reason={e.detail}"
         return RedirectResponse(error_redirect)
     except Exception as e:
-        print(f"Slack OAuth callback unexpected error: {str(e)}")
+        # Handle unexpected errors (same as GitHub)
+        print(f"Unexpected Slack OAuth callback error: {str(e)}")
         error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=error&reason=internal_error"
         return RedirectResponse(error_redirect)
 
@@ -460,11 +467,12 @@ def get_provider_credentials(
 async def get_slack_channels(orgId: str = Query(...), db: Session = Depends(get_db)):
     """
     Fetch list of Slack channels for the organization.
-    Returns 400 if no Slack integration is connected.
+    Returns a JSON error if no Slack integration is connected or if Slack API fails.
     """
     token = get_slack_bot_token(db, orgId)
 
     if not token:
+        debug_log(f"No Slack token found for org={orgId}")
         return {"error": "No Slack integration found for this organization", "code": "no_integration"}
 
     async with httpx.AsyncClient() as client:
@@ -475,8 +483,8 @@ async def get_slack_channels(orgId: str = Query(...), db: Session = Depends(get_
         )
 
         if resp.status_code != 200:
-            debug_log(f"Slack API error: {resp.status_code} - {resp.text}")
-            raise HTTPException(resp.status_code, f"Slack API error: {resp.text}")
+            debug_log(f"Slack API HTTP error: {resp.status_code} - {resp.text}")
+            return {"error": f"Slack API error (HTTP {resp.status_code})", "code": "http_error"}
 
         data = resp.json()
         debug_log(f"Slack conversations.list response: {data}")
