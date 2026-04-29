@@ -349,18 +349,18 @@ async def oauth_callback_slack(code: str, state: str, db: Session = Depends(get_
         )
 
         # Success - redirect to frontend (same pattern as GitHub)
-        frontend_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=success"
+        frontend_redirect = f"{frontend_url}/organization/settings/integrations?orgId={orgId}&provider=slack&status=success"
         return RedirectResponse(frontend_redirect)
 
     except HTTPException as e:
         # Handle HTTP exceptions with user-friendly error page (same as GitHub)
         print(f"Slack OAuth callback error: {e.detail}")
-        error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=error&reason={e.detail}"
+        error_redirect = f"{frontend_url}/organization/settings/integrations?orgId={orgId}&provider=slack&status=error&reason={e.detail}"
         return RedirectResponse(error_redirect)
     except Exception as e:
         # Handle unexpected errors (same as GitHub)
         print(f"Unexpected Slack OAuth callback error: {str(e)}")
-        error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=error&reason=internal_error"
+        error_redirect = f"{frontend_url}/organization/settings/integrations?orgId={orgId}&provider=slack&status=error&reason=internal_error"
         return RedirectResponse(error_redirect)
 
 
@@ -428,16 +428,16 @@ async def oauth_callback_clickup(code: str, state: str, db: Session = Depends(ge
         )
 
         # Success - redirect to frontend
-        frontend_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=clickup&status=success"
+        frontend_redirect = f"{frontend_url}/organization/settings/integrations?orgId={orgId}&provider=clickup&status=success"
         return RedirectResponse(frontend_redirect)
 
     except HTTPException as e:
         print(f"ClickUp OAuth callback error: {e.detail}")
-        error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=clickup&status=error&reason={e.detail}"
+        error_redirect = f"{frontend_url}/organization/settings/integrations?orgId={orgId}&provider=clickup&status=error&reason={e.detail}"
         return RedirectResponse(error_redirect)
     except Exception as e:
         print(f"Unexpected ClickUp OAuth callback error: {str(e)}")
-        error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=clickup&status=error&reason=internal_error"
+        error_redirect = f"{frontend_url}/organization/settings/integrations?orgId={orgId}&provider=clickup&status=error&reason=internal_error"
         return RedirectResponse(error_redirect)
 
 
