@@ -81,8 +81,13 @@ INTEGRATION_DEFAULTS = {
         "type": "oauth"
     },
     "clickup": {
-        "scopes": "",  
-        "type": "apikey",
+        "client_id_env": "CLICKUP_CLIENT_ID",
+        "client_secret_env": "CLICKUP_CLIENT_SECRET",
+        "authorize_url": "https://app.clickup.com/api",
+        "token_url": "https://api.clickup.com/api/v2/oauth/token",
+        "redirect_uri_env": "CLICKUP_REDIRECT_URI",
+        "scopes": "",
+        "type": "oauth",
     },
     "linear": {
         "scopes": "",  

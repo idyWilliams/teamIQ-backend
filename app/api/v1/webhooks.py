@@ -661,14 +661,28 @@ async def clickup_webhook(
 
 
 def _fetch_clickup_task(task_id: str, project: Project) -> Optional[dict]:
-    """Fetch full task data from ClickUp API"""
-    # Decrypt API key
-    api_key = decrypt_field(project.pm_api_key)
+    """Fetch full task data from ClickUp API - supports OAuth and API key"""
+    # Try to get OAuth token first, fall back to API key
+    # Check if project has an integration connection with OAuth token
+    from app.models.integration import IntegrationConnection
+    conn = project.db.query(IntegrationConnection).filter_by(
+        organization_id=project.organization_id,
+        provider="clickup",
+        is_active=True
+    ).first()
+
+    if conn and conn.access_token:
+        auth_header = f"Bearer {conn.access_token}"
+    elif project.pm_api_key:
+        auth_header = decrypt_field(project.pm_api_key)
+    else:
+        print("No ClickUp credentials found")
+        return None
 
     try:
         response = requests.get(
             f"https://api.clickup.com/api/v2/task/{task_id}",
-            headers={"Authorization": api_key},
+            headers={"Authorization": auth_header},
             timeout=10
         )
 

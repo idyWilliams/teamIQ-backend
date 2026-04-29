@@ -115,10 +115,20 @@ async def get_account_id_from_provider(provider, access_token, api_key=None):
                 headers={"Authorization": f"Bearer {access_token}"})
             user = resp.json()
             return str(user.get("id", "teams_user"))
-        elif provider == "clickup" and api_key:
-            resp = await client.get(
-                "https://api.clickup.com/api/v2/user",
-                headers={"Authorization": api_key})
+        elif provider == "clickup":
+            # Support both OAuth (access_token) and API key auth
+            if access_token:
+                # OAuth flow - use Bearer token
+                resp = await client.get(
+                    "https://api.clickup.com/api/v2/user",
+                    headers={"Authorization": f"Bearer {access_token}"})
+            elif api_key:
+                # API key flow
+                resp = await client.get(
+                    "https://api.clickup.com/api/v2/user",
+                    headers={"Authorization": api_key})
+            else:
+                return "clickup_user"
             user = resp.json()
             return str(user.get("user", {}).get("id") or user.get("user", {}).get("username", "clickup_user"))
         elif provider == "trello" and api_key:
@@ -351,6 +361,83 @@ async def oauth_callback_slack(code: str, state: str, db: Session = Depends(get_
         # Handle unexpected errors (same as GitHub)
         print(f"Unexpected Slack OAuth callback error: {str(e)}")
         error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=slack&status=error&reason=internal_error"
+        return RedirectResponse(error_redirect)
+
+
+@router.get("/oauth/callback/clickup")
+async def oauth_callback_clickup(code: str, state: str, db: Session = Depends(get_db)):
+    """
+    ClickUp OAuth callback - exchanges authorization code for access token.
+    Follows the same pattern as Slack OAuth callback.
+    """
+    frontend_url = os.getenv("FRONTEND_URL", "https://team-iq-frontend.vercel.app")
+
+    try:
+        try:
+            orgId, provider = state.split(":")
+        except Exception:
+            raise HTTPException(400, "Invalid state param structure")
+
+        debug_log(f"ClickUp OAuth callback: state={state}, orgId={orgId}, provider={provider}")
+
+        # Resolve ClickUp credentials
+        creds = resolve_creds(db, orgId, "clickup")
+
+        # Exchange code for token using ClickUp's token endpoint
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                creds["token_url"],
+                data={
+                    "client_id": creds["client_id"],
+                    "client_secret": creds["client_secret"],
+                    "code": code,
+                    "redirect_uri": creds["redirect_uri"],
+                    "grant_type": "authorization_code",
+                }
+            )
+            debug_log(f"ClickUp token exchange response status: {resp.status_code}")
+            debug_log(f"ClickUp token exchange response body: {resp.text}")
+
+            if resp.status_code != 200:
+                raise HTTPException(400, f"Failed token exchange: {resp.text}")
+
+            token_data = resp.json()
+            access_token = token_data.get("access_token")
+            refresh_token = token_data.get("refresh_token")
+
+            if not access_token:
+                debug_log("ClickUp OAuth: No access token returned")
+                raise HTTPException(400, "No access token returned from ClickUp")
+
+            debug_log(f"ClickUp OAuth success: got access_token")
+
+        # Get workspace/team ID from ClickUp API using the OAuth token
+        account_id = await get_account_id_from_provider("clickup", access_token)
+        debug_log(f"Got ClickUp account_id={account_id}")
+
+        # Upsert integration connection
+        upsert_integration_connection(
+            db, {
+                "organization_id": orgId,
+                "provider": "clickup",
+                "account_id": account_id,
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "connected_by_user_id": account_id
+            }
+        )
+
+        # Success - redirect to frontend
+        frontend_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=clickup&status=success"
+        return RedirectResponse(frontend_redirect)
+
+    except HTTPException as e:
+        print(f"ClickUp OAuth callback error: {e.detail}")
+        error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=clickup&status=error&reason={e.detail}"
+        return RedirectResponse(error_redirect)
+    except Exception as e:
+        print(f"Unexpected ClickUp OAuth callback error: {str(e)}")
+        error_redirect = f"{frontend_url}/settings/integrations?orgId={orgId}&provider=clickup&status=error&reason=internal_error"
         return RedirectResponse(error_redirect)
 
 

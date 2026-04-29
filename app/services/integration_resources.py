@@ -21,7 +21,7 @@ async def fetch_integration_resources(provider: str, access_token: str, account_
     elif provider == "gitlab":
         return await _fetch_gitlab_projects(access_token)
     elif provider == "clickup":
-        return await _fetch_clickup_lists(api_key)
+        return await _fetch_clickup_lists(access_token, api_key)
     elif provider == "linear":
         return await _fetch_linear_teams(api_key)
     # Add other providers as needed
@@ -50,7 +50,7 @@ async def fetch_integration_users(provider: str, access_token: str, account_id: 
     elif provider == "gitlab":
         return await _fetch_gitlab_users(access_token, resource_id)
     elif provider == "clickup":
-        return await _fetch_clickup_users(api_key, resource_id)
+        return await _fetch_clickup_users(access_token, resource_id)
     elif provider == "linear":
         return await _fetch_linear_users(api_key, resource_id)
     return []
@@ -181,17 +181,25 @@ async def _fetch_gitlab_projects(token: str) -> List[Dict[str, Any]]:
             for proj in projects
         ]
 
-async def _fetch_clickup_lists(api_key: str) -> List[Dict[str, Any]]:
-    if not api_key:
+async def _fetch_clickup_lists(access_token: str = None, api_key: str = None) -> List[Dict[str, Any]]:
+    """Fetch ClickUp teams and spaces. Supports both OAuth and API key auth."""
+    # OAuth token takes precedence
+    token = access_token or api_key
+    if not token:
         return []
+
+    # Determine auth header based on token type
+    if access_token:
+        auth_header = f"Bearer {token}"
+    else:
+        auth_header = token
+
     async with httpx.AsyncClient() as client:
         # ClickUp hierarchy is Team -> Space -> Folder -> List
-        # This is complex. For MVP, let's just fetch Teams and maybe Spaces?
-        # Or just return empty for now if it's too deep.
-        # Let's try to fetch Teams first.
+        # Fetch Teams first
         resp = await client.get(
             "https://api.clickup.com/api/v2/team",
-            headers={"Authorization": api_key}
+            headers={"Authorization": auth_header}
         )
         if resp.status_code != 200:
             return []
@@ -204,7 +212,7 @@ async def _fetch_clickup_lists(api_key: str) -> List[Dict[str, Any]]:
             team_id = team["id"]
             resp_spaces = await client.get(
                 f"https://api.clickup.com/api/v2/team/{team_id}/space",
-                headers={"Authorization": api_key}
+                headers={"Authorization": auth_header}
             )
             if resp_spaces.status_code == 200:
                 spaces = resp_spaces.json().get("spaces", [])
@@ -558,20 +566,29 @@ async def _fetch_gitlab_users(token: str, resource_id: str = None) -> List[Dict[
             }]
 
 
-async def _fetch_clickup_users(api_key: str, resource_id: str = None) -> List[Dict[str, Any]]:
+async def _fetch_clickup_users(access_token: str = None, api_key: str = None, resource_id: str = None) -> List[Dict[str, Any]]:
     """
-    Fetch ClickUp users.
+    Fetch ClickUp users. Supports both OAuth and API key auth.
     If resource_id is provided (list ID), fetch members from that list.
     Otherwise, fetch all team members.
     """
-    if not api_key:
+    # OAuth token takes precedence
+    token = access_token or api_key
+    if not token:
         return []
+
+    # Determine auth header based on token type
+    if access_token:
+        auth_header = f"Bearer {token}"
+    else:
+        auth_header = token
+
     async with httpx.AsyncClient() as client:
         if resource_id:
             # Fetch list details to get members
             resp = await client.get(
                 f"https://api.clickup.com/api/v2/list/{resource_id}",
-                headers={"Authorization": api_key}
+                headers={"Authorization": auth_header}
             )
             if resp.status_code != 200:
                 print(f"ClickUp list error: {resp.status_code} - {resp.text}")
@@ -594,7 +611,7 @@ async def _fetch_clickup_users(api_key: str, resource_id: str = None) -> List[Di
             # Get teams first
             resp = await client.get(
                 "https://api.clickup.com/api/v2/team",
-                headers={"Authorization": api_key}
+                headers={"Authorization": auth_header}
             )
             if resp.status_code != 200:
                 return []

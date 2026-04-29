@@ -257,12 +257,18 @@ class PMToolSync(BaseIntegrationSync):
             raise IntegrationError(f"Failed to connect to Linear: {str(e)}")
 
     def _sync_clickup_tasks(self, resource):
-        """Fetch and sync ClickUp tasks"""
-        api_key = resource.connection.api_key
-        if not api_key:
-            raise IntegrationError("Missing ClickUp API key")
+        """Fetch and sync ClickUp tasks - supports both OAuth and API key"""
+        # OAuth token takes precedence over API key
+        auth_token = resource.connection.access_token or resource.connection.api_key
+        if not auth_token:
+            raise IntegrationError("Missing ClickUp credentials")
 
-        headers = {"Authorization": api_key}
+        # Determine auth header based on token type
+        if resource.connection.access_token:
+            headers = {"Authorization": f"Bearer {auth_token}"}
+        else:
+            headers = {"Authorization": auth_token}
+
         list_id = resource.resource_id
 
         try:

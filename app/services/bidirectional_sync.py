@@ -298,20 +298,23 @@ class JiraBidirectionalSync(BaseBidirectionalSync):
 # ==============================================================================
 
 class ClickUpBidirectionalSync(BaseBidirectionalSync):
-    """Complete ClickUp integration with bidirectional sync"""
+    """Complete ClickUp integration with bidirectional sync (OAuth + API key)"""
 
     def is_configured(self) -> bool:
         return bool(
             self.resource.connection.provider == "clickup" and
             self.resource.resource_id and
-            self.resource.connection.api_key
+            (self.resource.connection.api_key or self.resource.connection.access_token)
         )
 
-   # In bidirectional_sync.py
-
     def get_headers(self) -> Dict:
-        """Build ClickUp auth headers"""
-        return {"Authorization": self.resource.connection.api_key}
+        """Build ClickUp auth headers - supports both OAuth and API key"""
+        conn = self.resource.connection
+        # OAuth token takes precedence
+        if conn.access_token:
+            return {"Authorization": f"Bearer {conn.access_token}"}
+        # Fall back to API key
+        return {"Authorization": conn.api_key}
 
 
     # -------------------------------------------------------------------------
