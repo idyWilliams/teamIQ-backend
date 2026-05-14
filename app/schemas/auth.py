@@ -6,9 +6,14 @@ from app.schemas.organization import OrganizationOut
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str
     user: Optional[UserOut] = None
     organization: Optional[OrganizationOut] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 class PasswordResetRequest(BaseModel):

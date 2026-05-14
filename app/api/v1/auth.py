@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
 from sqlalchemy.orm import Session
 import datetime
 
@@ -9,6 +9,8 @@ from app.repositories.invitation_repository import get_invitation_by_code
 from app.core.hashing import verify_password, get_password_hash
 from app.core.security import (
     create_access_token,
+    create_refresh_token,
+    decode_token,
     create_reset_token,
     get_current_user_or_organization,
     verify_reset_token,
@@ -21,7 +23,7 @@ from app.repositories.user_org_repository import link_user_to_org
 # Schemas
 from app.schemas.user import UserCreate, UserOut
 from app.schemas.organization import OrganizationOut
-from app.schemas.auth import Token, PasswordResetRequest, PasswordResetConfirm, LoginRequest
+from app.schemas.auth import Token, PasswordResetRequest, PasswordResetConfirm, LoginRequest, RefreshTokenRequest
 
 router = APIRouter()
 
@@ -107,8 +109,12 @@ def register_user(
 
     organization_out = OrganizationOut.model_validate(primary_org)
 
-    # Generate token
-    token = create_access_token(
+    # Generate tokens
+    access_token = create_access_token(
+        data={"sub": user_entity.email},
+        entity_type="user"
+    )
+    refresh_token = create_refresh_token(
         data={"sub": user_entity.email},
         entity_type="user"
     )
@@ -117,7 +123,8 @@ def register_user(
         success=True,
         message="User registration completed successfully",
         data=Token(
-            access_token=token,
+            access_token=access_token,
+            refresh_token=refresh_token,
             token_type="bearer",
             user=UserOut.model_validate(user_entity),
             onboarding_completed=False,
@@ -160,22 +167,89 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         expires_delta=expires_delta,
         entity_type=entity_type
     )
+    refresh_token = create_refresh_token(
+        data={"sub": user_obj.email},
+        entity_type=entity_type
+    )
 
     # Distinguish between organization and user
     if entity_type == "organization":  # Organization
         return create_response(
             success=True,
             message="Organization login successful",
-            data=Token(access_token=access_token, token_type="bearer",
-                       organization=OrganizationOut.model_validate(user_obj))
+            data=Token(
+                access_token=access_token, 
+                refresh_token=refresh_token,
+                token_type="bearer",
+                organization=OrganizationOut.model_validate(user_obj)
+            )
         )
     else:  # User
         return create_response(
             success=True,
             message="User login successful",
-            data=Token(access_token=access_token, token_type="bearer",
-                       user=UserOut.model_validate(user_obj))
+            data=Token(
+                access_token=access_token, 
+                refresh_token=refresh_token,
+                token_type="bearer",
+                user=UserOut.model_validate(user_obj)
+            )
         )
+
+
+# ----------------------------
+# TOKEN REFRESH
+# ----------------------------
+@router.post("/refresh")
+def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
+    """
+    Exchange a valid refresh token for a new access token.
+    """
+    payload = decode_token(request.refresh_token)
+    
+    if not payload or payload.get("token_type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    email = payload.get("sub")
+    entity_type = payload.get("entity_type", "user")
+    
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+        
+    # Optional: Verify user still exists and is active
+    if entity_type == "organization":
+        user_obj = organization_repository.get_organization_by_email(db, email)
+    else:
+        user_obj = user_repository.get_user_by_email(db, email)
+        
+    if not user_obj:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    # Generate new access token
+    new_access_token = create_access_token(
+        data={"sub": email},
+        entity_type=entity_type
+    )
+    
+    # Also generate a new refresh token (refresh token rotation)
+    new_refresh_token = create_refresh_token(
+        data={"sub": email},
+        entity_type=entity_type
+    )
+
+    return create_response(
+        success=True,
+        message="Token refreshed successfully",
+        data={
+            "access_token": new_access_token,
+            "refresh_token": new_refresh_token,
+            "token_type": "bearer"
+        }
+    )
 
 
 # ----------------------------
