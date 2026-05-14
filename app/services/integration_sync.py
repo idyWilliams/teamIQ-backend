@@ -12,7 +12,7 @@ from app.models.task import Task, TaskStatus
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.contribution import Contribution
-from app.models.activity import Activity
+from app.models.activity import Activity, CommitActivity, PullRequestActivity
 
 
 class IntegrationError(Exception):
@@ -39,7 +39,7 @@ class BaseIntegrationSync:
         print(f"📝 Integration error for project {self.project.id}: {error_message}")
         # TODO: Store in database for user dashboard notifications
 
-    def _get_user_from_external_id(self, provider: str, external_id: str) -> Optional[int]:
+    def _get_user_from_external_id(self, provider: str, external_id: str, email: str = None) -> Optional[int]:
         """
         Get TeamIQ user_id from external platform user ID using mappings.
         Falls back to email matching if no mapping exists.
@@ -47,25 +47,50 @@ class BaseIntegrationSync:
         Args:
             provider: Platform name (e.g., 'github', 'slack', 'jira')
             external_id: User ID on the external platform
+            email: Optional email to match against
 
         Returns:
             TeamIQ user_id or None if not found
         """
         from app.models.project import ProjectMember
         from sqlalchemy import cast, String
-        from sqlalchemy.dialects.postgresql import JSONB
-
-        if not external_id:
+        
+        if not external_id and not email:
             return None
 
-        # Try to find user via external_mappings
-        member = self.db.query(ProjectMember).filter(
-            ProjectMember.project_id == self.project.id,
-            cast(ProjectMember.external_mappings[provider], String) == str(external_id)
-        ).first()
+        # 1. Try to find user via external_mappings
+        if external_id:
+            member = self.db.query(ProjectMember).filter(
+                ProjectMember.project_id == self.project.id,
+                cast(ProjectMember.external_mappings[provider], String).contains(str(external_id))
+            ).first()
 
-        if member:
-            return member.user_id
+            if member:
+                return member.user_id
+
+        # 2. Try to find user by email if provided
+        if email:
+            user = self.db.query(User).filter(User.email == email).first()
+            if user:
+                # Optional: Auto-create mapping for future use
+                member = self.db.query(ProjectMember).filter(
+                    ProjectMember.project_id == self.project.id,
+                    ProjectMember.user_id == user.id
+                ).first()
+                
+                if member:
+                    if not member.external_mappings:
+                        member.external_mappings = {}
+                    
+                    if provider not in member.external_mappings or member.external_mappings[provider] != external_id:
+                        # Update mapping
+                        mappings = dict(member.external_mappings)
+                        mappings[provider] = external_id
+                        member.external_mappings = mappings
+                        self.db.commit()
+                        print(f"🔗 Auto-mapped {provider} user {external_id} to TeamIQ user {user.id} via email")
+                
+                return user.id
 
         # No mapping found
         print(f"⚠️  No mapping found for {provider} user {external_id} in project {self.project.id}")
@@ -153,6 +178,7 @@ class PMToolSync(BaseIntegrationSync):
                     self._sync_linear_issues(resource)
                 elif provider == "clickup":
                     self._sync_clickup_tasks(resource)
+                    self._sync_clickup_comments(resource)
 
             except IntegrationError as e:
                 print(f"❌ Integration Error ({provider}): {str(e)}")
@@ -161,6 +187,86 @@ class PMToolSync(BaseIntegrationSync):
             except Exception as e:
                 print(f"❌ Unexpected error ({provider}): {str(e)}")
                 self._store_integration_error(f"Sync failed: {str(e)}")
+
+    def _sync_clickup_comments(self, resource):
+        """Fetch and sync comments for ClickUp tasks in this list"""
+        auth_token = resource.connection.access_token or resource.connection.api_key
+        if not auth_token:
+            return
+
+        if resource.connection.access_token:
+            headers = {"Authorization": f"Bearer {auth_token}"}
+        else:
+            headers = {"Authorization": auth_token}
+
+        # Get tasks for this resource to fetch their comments
+        tasks = self.db.query(Task).filter(
+            Task.project_id == self.project.id,
+            Task.external_source == "clickup"
+        ).all()
+
+        from app.models.task import TaskComment
+        from app.models.activity import Activity
+
+        for task in tasks:
+            try:
+                response = requests.get(
+                    f"https://api.clickup.com/api/v2/task/{task.external_id}/comment",
+                    headers=headers,
+                    timeout=20
+                )
+                if response.status_code == 200:
+                    comments = response.json().get("comments", [])
+                    for comment_data in comments:
+                        self._process_clickup_comment(comment_data, task)
+            except Exception as e:
+                print(f"⚠️ Failed to sync ClickUp comments for task {task.external_id}: {e}")
+
+    def _process_clickup_comment(self, comment_data: Dict, task: Task):
+        """Process a single ClickUp comment"""
+        from app.models.task import TaskComment
+        external_id = str(comment_data["id"])
+        
+        # Check if exists
+        existing = self.db.query(TaskComment).filter(
+            TaskComment.external_id == external_id,
+            TaskComment.external_source == "clickup"
+        ).first()
+        if existing:
+            return
+
+        # Map user
+        clickup_user_id = str(comment_data["user"]["id"])
+        user_id = self._get_user_from_external_id("clickup", clickup_user_id)
+        
+        if not user_id:
+            return
+
+        # Create TaskComment
+        new_comment = TaskComment(
+            task_id=task.id,
+            user_id=user_id,
+            content=comment_data["comment_text"],
+            external_id=external_id,
+            external_source="clickup"
+        )
+        self.db.add(new_comment)
+        
+        # Create Activity
+        new_activity = Activity(
+            user_id=user_id,
+            project_id=self.project.id,
+            type="task_comment",
+            source="clickup",
+            action="created",
+            title=f"Commented on task: {task.title}",
+            content=comment_data["comment_text"],
+            external_id=external_id,
+            external_url=task.external_url,
+            timestamp=datetime.fromtimestamp(int(comment_data["date"])/1000)
+        )
+        self.db.add(new_activity)
+        self.db.commit()
 
     def _sync_jira_issues(self, resource):
         """Fetch and sync Jira issues for a specific resource"""
@@ -445,7 +551,9 @@ class VersionControlSync(BaseIntegrationSync):
             try:
                 provider = resource.connection.provider
                 if provider == "github":
+                    self._sync_github_repo_info(resource)
                     self._sync_github_commits(resource)
+                    self._sync_github_prs(resource)
                 elif provider == "gitlab":
                     self._sync_gitlab_commits(resource)
                 elif provider == "bitbucket":
@@ -459,9 +567,37 @@ class VersionControlSync(BaseIntegrationSync):
                 print(f"❌ Unexpected VC error ({provider}): {str(e)}")
                 self._store_integration_error(f"VC sync failed: {str(e)}")
 
+    def _sync_github_repo_info(self, resource):
+        """Fetch repository info (languages, etc.)"""
+        repo_path = resource.name
+        token = resource.connection.access_token
+
+        if not token:
+            return
+
+        headers = {"Authorization": f"Bearer {token}"}
+        try:
+            # Fetch languages
+            response = requests.get(
+                f"https://api.github.com/repos/{repo_path}/languages",
+                headers=headers,
+                timeout=10
+            )
+            if response.status_code == 200:
+                languages = list(response.json().keys())
+                if languages:
+                    # Update project stacks if they are empty or just merged
+                    current_stacks = self.project.stacks or []
+                    updated_stacks = list(set(current_stacks + languages))
+                    self.project.stacks = updated_stacks
+                    self.db.add(self.project)
+                    self.db.commit()
+                    print(f"✅ Updated project stacks for {repo_path}: {languages}")
+        except Exception as e:
+            print(f"⚠️ Failed to fetch GitHub repo info: {e}")
+
     def _sync_github_commits(self, resource):
-        """Fetch commits from GitHub"""
-        # resource.name is typically "owner/repo"
+        """Fetch commits from GitHub with details"""
         repo_path = resource.name
         token = resource.connection.access_token
 
@@ -469,91 +605,214 @@ class VersionControlSync(BaseIntegrationSync):
             raise IntegrationError("Missing GitHub access token")
 
         headers = {"Authorization": f"Bearer {token}"}
-        since = datetime.utcnow() - timedelta(days=30)
+        since = (datetime.utcnow() - timedelta(days=30)).isoformat()
 
         try:
             response = requests.get(
                 f"https://api.github.com/repos/{repo_path}/commits",
                 headers=headers,
-                params={"since": since.isoformat(), "per_page": 100},
+                params={"since": since, "per_page": 50},
                 timeout=30
             )
 
-            if response.status_code == 401:
-                raise IntegrationError("GitHub authentication failed.")
-
-            if response.status_code == 404:
-                raise IntegrationError(f"GitHub repository '{repo_path}' not found")
-
             if response.status_code == 200:
                 commits = response.json()
-                self._process_github_commits(commits)
-                print(f"✅ Fetched {len(commits)} GitHub commits from {repo_path}")
+                for commit_data in commits:
+                    # For recent commits, get full details to get file stats
+                    # Limit to first 10 to avoid rate limits during sync
+                    full_commit_data = commit_data
+                    if commits.index(commit_data) < 10:
+                        try:
+                            detail_resp = requests.get(commit_data["url"], headers=headers, timeout=10)
+                            if detail_resp.status_code == 200:
+                                full_commit_data = detail_resp.json()
+                        except:
+                            pass
+                    
+                    self._process_github_commit_detailed(full_commit_data, resource)
+                
+                print(f"✅ Synced {len(commits)} GitHub commits from {repo_path}")
 
         except requests.exceptions.RequestException as e:
             raise IntegrationError(f"Failed to connect to GitHub: {str(e)}")
 
-    def _sync_gitlab_commits(self):
-        """Fetch commits from GitLab"""
-        repo_path = self.get_repo_path()
-        if not repo_path:
-            raise IntegrationError("Invalid GitLab repository URL")
+    def _sync_github_prs(self, resource):
+        """Fetch pull requests from GitHub"""
+        repo_path = resource.name
+        token = resource.connection.access_token
 
-        headers = self.get_headers()
-        since = datetime.utcnow() - timedelta(days=30)
-        project_id = repo_path.replace("/", "%2F")
+        if not token:
+            return
 
+        headers = {"Authorization": f"Bearer {token}"}
         try:
             response = requests.get(
-                f"https://gitlab.com/api/v4/projects/{project_id}/repository/commits",
+                f"https://api.github.com/repos/{repo_path}/pulls",
                 headers=headers,
-                params={"since": since.isoformat(), "per_page": 100},
+                params={"state": "all", "per_page": 50},
                 timeout=30
             )
 
-            if response.status_code == 401:
-                raise IntegrationError("GitLab authentication failed. Check your token.")
-
-            if response.status_code == 404:
-                raise IntegrationError(f"GitLab repository '{repo_path}' not found")
-
             if response.status_code == 200:
-                commits = response.json()
-                self._process_gitlab_commits(commits)
-                print(f"✅ Fetched {len(commits)} GitLab commits for project {self.project.id}")
+                prs = response.json()
+                from app.models.activity import PullRequestActivity
+                
+                for pr_data in prs:
+                    self._process_github_pr(pr_data, resource)
+                
+                print(f"✅ Synced {len(prs)} GitHub PRs from {repo_path}")
+        except Exception as e:
+            print(f"⚠️ Failed to sync GitHub PRs: {e}")
 
-        except requests.exceptions.RequestException as e:
-            raise IntegrationError(f"Failed to connect to GitLab: {str(e)}")
+    def _process_github_commit_detailed(self, commit_data: Dict, resource):
+        """Process GitHub commit and save to CommitActivity and Activity models"""
+        from app.models.activity import CommitActivity
+        
+        external_id = commit_data["sha"]
+        
+        # Check if already exists
+        existing = self.db.query(CommitActivity).filter(CommitActivity.commit_sha == external_id).first()
+        if existing:
+            return
 
-    def _sync_bitbucket_commits(self):
-        """Fetch commits from Bitbucket"""
-        repo_path = self.get_repo_path()
-        if not repo_path:
-            raise IntegrationError("Invalid Bitbucket repository URL")
+        # Map user
+        author_data = commit_data.get("author")
+        github_author_id = str(author_data["id"]) if author_data and "id" in author_data else None
+        
+        user_id = None
+        if github_author_id:
+            user_id = self._get_user_from_external_id("github", github_author_id)
+        
+        # Fallback to email mapping if needed
+        if not user_id:
+            author_email = commit_data.get("commit", {}).get("author", {}).get("email")
+            user = self.db.query(User).filter(User.email == author_email).first()
+            if user:
+                user_id = user.id
 
-        headers = self.get_headers()
+        if not user_id:
+            return
 
-        try:
-            response = requests.get(
-                f"https://api.bitbucket.org/2.0/repositories/{repo_path}/commits",
-                headers=headers,
-                params={"pagelen": 100},
-                timeout=30
-            )
+        # Extract file changes
+        files_list = []
+        additions = 0
+        deletions = 0
+        if "files" in commit_data:
+            files_list = [
+                {
+                    "filename": f.get("filename"),
+                    "status": f.get("status"),
+                    "additions": f.get("additions"),
+                    "deletions": f.get("deletions")
+                }
+                for f in commit_data["files"]
+            ]
+            additions = sum(f.get("additions", 0) for f in commit_data["files"])
+            deletions = sum(f.get("deletions", 0) for f in commit_data["files"])
+        elif "stats" in commit_data:
+            additions = commit_data["stats"].get("additions", 0)
+            deletions = commit_data["stats"].get("deletions", 0)
 
-            if response.status_code == 401:
-                raise IntegrationError("Bitbucket authentication failed. Check your token.")
+        # Create CommitActivity
+        new_commit = CommitActivity(
+            user_id=user_id,
+            project_id=self.project.id,
+            commit_sha=external_id,
+            message=commit_data["commit"]["message"],
+            repository=resource.name,
+            source="github",
+            external_url=commit_data.get("html_url"),
+            timestamp=datetime.fromisoformat(commit_data["commit"]["author"]["date"].replace("Z", "+00:00")),
+            files_changed=len(files_list) if files_list else 0,
+            additions=additions,
+            deletions=deletions,
+            files=files_list
+        )
+        self.db.add(new_commit)
 
-            if response.status_code == 404:
-                raise IntegrationError(f"Bitbucket repository '{repo_path}' not found")
+        # Create general Activity record
+        new_activity = Activity(
+            user_id=user_id,
+            project_id=self.project.id,
+            type="commit",
+            source="github",
+            action="created",
+            title=commit_data["commit"]["message"][:100],
+            content=commit_data["commit"]["message"],
+            external_id=external_id,
+            external_url=commit_data.get("html_url"),
+            timestamp=new_commit.timestamp,
+            impact_score=self._calculate_impact(additions, deletions)
+        )
+        self.db.add(new_activity)
+        self.db.commit()
 
-            if response.status_code == 200:
-                commits = response.json().get("values", [])
-                self._process_bitbucket_commits(commits)
-                print(f"✅ Fetched {len(commits)} Bitbucket commits for project {self.project.id}")
+    def _process_github_pr(self, pr_data: Dict, resource):
+        """Process GitHub Pull Request and save to PullRequestActivity and Activity models"""
+        from app.models.activity import PullRequestActivity
+        
+        external_id = str(pr_data["id"])
+        
+        # Check if already exists
+        existing = self.db.query(PullRequestActivity).filter(
+            PullRequestActivity.external_id == external_id,
+            PullRequestActivity.source == "github"
+        ).first()
+        if existing:
+            return
 
-        except requests.exceptions.RequestException as e:
-            raise IntegrationError(f"Failed to connect to Bitbucket: {str(e)}")
+        # Map user
+        author_data = pr_data.get("user")
+        github_author_id = str(author_data["id"]) if author_data and "id" in author_data else None
+        
+        user_id = None
+        if github_author_id:
+            user_id = self._get_user_from_external_id("github", github_author_id)
+        
+        if not user_id:
+            return
+
+        # Create PullRequestActivity
+        new_pr = PullRequestActivity(
+            user_id=user_id,
+            project_id=self.project.id,
+            pr_number=pr_data["number"],
+            title=pr_data["title"],
+            description=pr_data.get("body", ""),
+            state=pr_data["state"],
+            external_id=external_id,
+            external_url=pr_data["html_url"],
+            source="github",
+            created_at=datetime.fromisoformat(pr_data["created_at"].replace("Z", "+00:00")),
+            merged_at=datetime.fromisoformat(pr_data["merged_at"].replace("Z", "+00:00")) if pr_data.get("merged_at") else None
+        )
+        self.db.add(new_pr)
+
+        # Create general Activity record
+        new_activity = Activity(
+            user_id=user_id,
+            project_id=self.project.id,
+            type="pull_request",
+            source="github",
+            action="created" if pr_data["state"] == "open" else ("merged" if pr_data.get("merged_at") else "closed"),
+            title=pr_data["title"],
+            content=pr_data.get("body", ""),
+            external_id=external_id,
+            external_url=pr_data["html_url"],
+            timestamp=new_pr.created_at,
+            impact_score=5.0 # PRs generally have high impact
+        )
+        self.db.add(new_activity)
+        self.db.commit()
+
+    def _calculate_impact(self, additions: int, deletions: int) -> float:
+        """Simple impact score calculation based on lines changed"""
+        total = additions + deletions
+        if total < 10: return 1.0
+        if total < 50: return 3.0
+        if total < 200: return 5.0
+        if total < 1000: return 8.0
+        return 10.0
 
     def _process_github_commits(self, commits: List[Dict]):
         """Process GitHub commits for contribution metrics"""
@@ -742,7 +1001,8 @@ class CommunicationSync(BaseIntegrationSync):
                 if existing_activity:
                     continue
 
-                # Get Slack user ID
+                # Get Slack user ID and try to get email if possible
+                # (Note: conversations.history doesn't always include user details like email)
                 slack_user_id = message.get("user")
 
                 if slack_user_id:
@@ -756,8 +1016,8 @@ class CommunicationSync(BaseIntegrationSync):
                             external_id=external_id,
                             content=message["text"],
                             timestamp=datetime.fromtimestamp(float(external_id)),
-                            channel=channel_id,
-                            url=f"https://slack.com/archives/{channel_id}/p{external_id.replace('.', '')}"
+                            channel_id=channel_id,
+                            external_url=f"https://slack.com/archives/{channel_id}/p{external_id.replace('.', '')}"
                         )
                         self.db.add(new_activity)
                     else:
@@ -820,8 +1080,8 @@ class CommunicationSync(BaseIntegrationSync):
                             external_id=external_id,
                             content=message["content"],
                             timestamp=message["timestamp"],
-                            channel=message["channel_id"],
-                            url=f"https://discord.com/channels/{self.project.organization_id}/{message['channel_id']}/{external_id}"
+                            channel_id=message["channel_id"],
+                            external_url=f"https://discord.com/channels/{self.project.organization_id}/{message['channel_id']}/{external_id}"
                         )
                         self.db.add(new_activity)
                     else:

@@ -7,8 +7,8 @@ from app.core.security import get_current_organization, get_current_user_or_orga
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.project import Project, ProjectMember
-from app.models.task import Task, TaskStatus
-from app.models.activity import Activity, CommitActivity
+from app.models.task import Task, TaskStatus, TaskComment
+from app.models.activity import Activity, CommitActivity, PullRequestActivity
 from app.schemas.project import (
     ProjectDetailsCreate,
     PMToolSetup,
@@ -215,11 +215,14 @@ def get_project_comprehensive_data(
 
     # Fetch all data
     members = db.query(ProjectMember).filter(ProjectMember.project_id == project_id).all()
-    tasks = db.query(Task).filter(Task.project_id == project_id).all()
+    tasks = db.query(Task).options(joinedload(Task.comments)).filter(Task.project_id == project_id).all()
+
+    from app.models.activity import PullRequestActivity
+    prs = db.query(PullRequestActivity).filter(PullRequestActivity.project_id == project_id).all()
 
     activities = db.query(Activity).filter(
         Activity.project_id == project_id
-    ).order_by(Activity.created_at.desc()).limit(limit).all()
+    ).order_by(Activity.timestamp.desc()).limit(limit).all()
 
     commits = db.query(CommitActivity).filter(
         CommitActivity.project_id == project_id
@@ -247,6 +250,7 @@ def get_project_comprehensive_data(
             "project": ProjectResponse.model_validate(project),
             "members": enriched_members,
             "tasks": tasks,
+            "pull_requests": prs,
             "activities": activities,
             "commits": commits,
             "resources": [
@@ -254,7 +258,8 @@ def get_project_comprehensive_data(
                     "id": r.id,
                     "resource_name": r.resource_name,
                     "resource_type": r.resource_type,
-                    "connection_id": r.connection_id
+                    "connection_id": r.connection_id,
+                    "provider": r.connection.provider if r.connection else None
                 } for r in resources
             ]
         }
@@ -698,6 +703,70 @@ def trigger_immediate_sync(
         data=results
     )
 
+
+
+@router.get("/{project_id}/integrated-data")
+def get_project_integrated_data(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Get all data pulled from integrated apps for a specific project.
+    Specifically focused on external tool data: Tasks, Commits, PRs, Messages.
+    """
+    project = project_repository.get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Authorization check
+    if isinstance(current_user, User):
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif isinstance(current_user, Organization):
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Fetch data from different sources
+    tasks = db.query(Task).filter(Task.project_id == project_id, Task.external_id.isnot(None)).all()
+    commits = db.query(CommitActivity).filter(CommitActivity.project_id == project_id).all()
+    
+    from app.models.activity import PullRequestActivity
+    prs = db.query(PullRequestActivity).filter(PullRequestActivity.project_id == project_id).all()
+    
+    # Filter messages/reactions from activities
+    messages = db.query(Activity).filter(
+        Activity.project_id == project_id,
+        Activity.type.in_(["message", "reaction", "task_comment"])
+    ).all()
+
+    # Group by tool
+    data_by_tool = {
+        "pm_tool": {
+            "name": project.pm_tool,
+            "tasks_count": len(tasks),
+            "tasks": tasks
+        },
+        "version_control": {
+            "name": project.vc_tool,
+            "commits_count": len(commits),
+            "commits": commits,
+            "pull_requests_count": len(prs),
+            "pull_requests": prs
+        },
+        "communication": {
+            "name": project.comm_tool,
+            "messages_count": len(messages),
+            "messages": messages
+        }
+    }
+
+    return create_response(
+        success=True,
+        message="Integrated data retrieved successfully",
+        data=data_by_tool
+    )
 
 
 @router.get("/{project_id}/webhook-health")
