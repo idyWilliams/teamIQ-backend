@@ -53,7 +53,7 @@ class DashboardService:
         dashboard.tasks_in_progress = sum(1 for t in tasks if t.status == TaskStatus.IN_PROGRESS)
         dashboard.tasks_overdue = sum(
             1 for t in tasks
-            if t.due_date and t.due_date < datetime.utcnow() and t.status != TaskStatus.DONE
+            if t.due_date and t.due_date.replace(tzinfo=None) < datetime.utcnow() and t.status != TaskStatus.DONE
         )
 
         # Calculate average completion time
@@ -114,6 +114,9 @@ class DashboardService:
         # Top projects (by contribution)
         dashboard.top_projects = self._calculate_top_projects(user_id)
 
+        # ✅ NEW: Calculate Skill Gaps and Trends
+        skill_analysis = self._calculate_skill_analysis(user_id)
+
         # Last activity timestamp
         if activities:
             dashboard.last_activity_at = max(a.timestamp for a in activities)
@@ -129,6 +132,10 @@ class DashboardService:
         return {
             "user_id": user_id,
             "user_name": f"{user.first_name} {user.last_name}",
+            "display_name": f"{user.first_name} {user.last_name}",
+            "job_title": user.track or user.role.value,
+            "avatar_url": user.profile_image,
+            "online_status": "online" if self._is_online(user) else "offline",
             "metrics": {
                 "tasks": {
                     "total": dashboard.tasks_total,
@@ -151,7 +158,8 @@ class DashboardService:
                     "messages_sent": dashboard.messages_sent,
                     "reactions_given": dashboard.reactions_given,
                     "files_shared": dashboard.files_shared,
-                    "avg_daily_messages": round(dashboard.messages_sent / 90, 2)
+                    "avg_daily_messages": round(dashboard.messages_sent / 30, 2), # Corrected to 30 days
+                    "sentiment_score": 0.85 # Placeholder
                 },
                 "scores": {
                     "productivity": round(dashboard.productivity_score, 1),
@@ -165,12 +173,61 @@ class DashboardService:
                     "current_task": dashboard.current_task_streak
                 }
             },
+            "skill_analysis": skill_analysis,
             "activity_by_day": dashboard.activity_by_day,
             "top_languages": dashboard.top_languages,
             "top_projects": dashboard.top_projects,
             "last_activity_at": dashboard.last_activity_at.isoformat() if dashboard.last_activity_at else None,
-            "ai_insights": ai_analysis,  # ✅ AI-POWERED INSIGHTS
+            "ai_insights": ai_analysis,
             "updated_at": dashboard.updated_at.isoformat()
+        }
+
+    def _is_online(self, user: User) -> bool:
+        if user.last_seen:
+            now = datetime.utcnow()
+            ls = user.last_seen.replace(tzinfo=None)
+            return (now - ls) < timedelta(minutes=5)
+        return False
+
+    def _calculate_skill_analysis(self, user_id: int) -> Dict:
+        """Calculate skill gaps, trends and proficiency for a user"""
+        from app.models.skill import UserSkill, Skill
+        
+        user_skills = self.db.query(UserSkill).join(Skill).filter(UserSkill.user_id == user_id).all()
+        
+        skills_data = []
+        gaps = []
+        improving_count = 0
+        
+        for us in user_skills:
+            proficiency = us.level * 20 # Convert 0-5 to 0-100
+            
+            # Placeholder trend calculation
+            trend = "stable"
+            trend_delta = 0
+            if proficiency > 80:
+                trend = "up"
+                trend_delta = 5
+                improving_count += 1
+            
+            skill_info = {
+                "name": us.skill.name,
+                "proficiency_score": proficiency,
+                "proficiency_percentage": proficiency,
+                "trend": trend,
+                "trend_delta": f"+{trend_delta}%" if trend_delta > 0 else "0%",
+                "members_strong_count": 1 if proficiency >= 75 else 0
+            }
+            skills_data.append(skill_info)
+            
+            if proficiency < 55:
+                gaps.append(us.skill.name)
+
+        return {
+            "skills": skills_data,
+            "gaps": gaps,
+            "improving_skills_count": improving_count,
+            "avg_proficiency": sum(s["proficiency_score"] for s in skills_data) / len(skills_data) if skills_data else 0
         }
 
     def _calculate_productivity_score(self, dashboard: UserDashboard) -> float:
@@ -489,19 +546,26 @@ class DashboardService:
             dashboard.avg_task_completion_rate = (dashboard.completed_tasks / dashboard.total_tasks) * 100
 
         # Aggregate code metrics
+        project_ids = [p.id for p in projects]
         dashboard.total_commits = self.db.query(CommitActivity).filter(
-            CommitActivity.project_id.in_([p.id for p in projects])
+            CommitActivity.project_id.in_(project_ids)
         ).count()
 
         dashboard.total_pull_requests = self.db.query(PullRequestActivity).filter(
-            PullRequestActivity.project_id.in_([p.id for p in projects])
+            PullRequestActivity.project_id.in_(project_ids)
         ).count()
 
         # Communication metrics
         dashboard.total_messages = self.db.query(Activity).filter(
             Activity.type == "message",
-            Activity.project_id.in_([p.id for p in projects])
+            Activity.project_id.in_(project_ids)
         ).count()
+
+        # ✅ NEW: Calculate tracks (departments) performance
+        tracks_data = self._calculate_tracks_performance(users, all_tasks)
+
+        # ✅ NEW: Skill proficiency and gaps team-wide
+        skill_analysis = self._calculate_org_skill_analysis(org_id)
 
         # Calculate team scores
         user_scores = []
@@ -521,17 +585,26 @@ class DashboardService:
         self.db.commit()
         self.db.refresh(dashboard)
 
-        # ✅ GET TOP CONTRIBUTORS
-        top_contributors = self._get_top_contributors(org_id)
+        # ✅ NEW: Active Blockers
+        blockers = self._get_active_blockers(org_id)
+
+        # ✅ NEW: Upcoming Deadlines
+        deadlines = self._get_upcoming_deadlines(org_id)
 
         return {
             "organization_id": org_id,
+            "org_id": org_id,
             "organization_name": org.organization_name,
+            "org_name": org.organization_name,
+            "org_logo": org.organization_image,
+            "industry": org.sector,
+            "subscription_plan": "Enterprise",
             "metrics": {
                 "team": {
                     "total_members": dashboard.total_members,
                     "active_members": dashboard.active_members,
-                    "activity_rate": round((dashboard.active_members / dashboard.total_members * 100) if dashboard.total_members > 0 else 0, 1)
+                    "activity_rate": round((dashboard.active_members / dashboard.total_members * 100) if dashboard.total_members > 0 else 0, 1),
+                    "average_team_proficiency": round(skill_analysis["avg_proficiency"], 1)
                 },
                 "projects": {
                     "total": dashboard.total_projects,
@@ -549,16 +622,155 @@ class DashboardService:
                     "total_prs": dashboard.total_pull_requests
                 },
                 "communication": {
-                    "total_messages": dashboard.total_messages
+                    "total_messages": dashboard.total_messages,
+                    "sentiment_score": 0.82 # Placeholder
                 },
                 "performance": {
                     "overall_productivity": round(dashboard.overall_productivity, 1),
                     "team_collaboration": round(dashboard.team_collaboration, 1),
-                    "code_quality": round(dashboard.code_quality, 1)
+                    "code_quality": round(dashboard.code_quality, 1),
+                    "top_performing_track": tracks_data[0]["track_name"] if tracks_data else "N/A"
                 }
             },
+            "tracks": tracks_data,
+            "skill_analysis": skill_analysis,
             "top_contributors": top_contributors,
+            "active_blockers": blockers,
+            "upcoming_deadlines": deadlines,
             "updated_at": dashboard.updated_at.isoformat()
+        }
+
+    def _get_active_blockers(self, org_id: int) -> List[Dict]:
+        """Get list of active blockers in organization"""
+        from app.models.task import Task
+        from app.models.project import Project
+        
+        blocked_tasks = self.db.query(Task).join(Project).filter(
+            Task.organization_id == org_id,
+            Task.is_blocked == True
+        ).all()
+        
+        return [{
+            "blocker_id": t.id,
+            "name": t.title,
+            "blocked_project_name": t.project.name if t.project else "Unknown",
+            "duration_active": "2 days", # Placeholder
+            "severity": t.priority.value if t.priority else "medium"
+        } for t in blocked_tasks]
+
+    def _get_upcoming_deadlines(self, org_id: int) -> List[Dict]:
+        """Get list of tasks with upcoming deadlines"""
+        from app.models.task import Task
+        from app.models.user import User
+        
+        now = datetime.utcnow()
+        upcoming = self.db.query(Task).join(User, Task.owner_id == User.id).filter(
+            Task.organization_id == org_id,
+            Task.status != TaskStatus.DONE,
+            Task.due_date > now
+        ).order_by(Task.due_date.asc()).limit(5).all()
+        
+        return [{
+            "task_name": t.title,
+            "assigner_name": t.owner.first_name if t.owner else "Unassigned",
+            "deadline_timestamp": t.due_date.isoformat() if t.due_date else None,
+            "time_remaining_string": self._get_time_remaining(t.due_date)
+        } for t in upcoming]
+
+    def _get_time_remaining(self, due_date: datetime) -> str:
+        if not due_date: return "No deadline"
+        diff = due_date.replace(tzinfo=None) - datetime.utcnow()
+        if diff.days > 0: return f"{diff.days}d remaining"
+        hours = diff.seconds // 3600
+        return f"{hours}h remaining"
+
+    def _calculate_tracks_performance(self, users: List[User], all_tasks: List[Task]) -> List[Dict]:
+        """Calculate performance metrics grouped by user tracks (departments)"""
+        tracks = {}
+        for user in users:
+            track_name = user.track or "General"
+            if track_name not in tracks:
+                tracks[track_name] = {
+                    "track_name": track_name,
+                    "member_count": 0,
+                    "active_members": [],
+                    "uncompleted_task_count": 0,
+                    "productivity_sum": 0.0
+                }
+            
+            tracks[track_name]["member_count"] += 1
+            if user.profile_image:
+                tracks[track_name]["active_members"].append(user.profile_image)
+            
+            # Get user dashboard for productivity score
+            user_dash = self.db.query(UserDashboard).filter(UserDashboard.user_id == user.id).first()
+            if user_dash:
+                tracks[track_name]["productivity_sum"] += user_dash.productivity_score
+
+        # Map uncompleted tasks to tracks
+        user_to_track = {u.id: u.track or "General" for u in users}
+        for task in all_tasks:
+            if task.status != TaskStatus.DONE and task.owner_id in user_to_track:
+                track_name = user_to_track[task.owner_id]
+                tracks[track_name]["uncompleted_task_count"] += 1
+
+        # Final formatting and sorting
+        result = []
+        for name, data in tracks.items():
+            avg_prod = data["productivity_sum"] / data["member_count"] if data["member_count"] > 0 else 0
+            data["average_proficiency"] = round(avg_prod, 1)
+            del data["productivity_sum"]
+            # Limit active members list for UI
+            data["active_members"] = data["active_members"][:5]
+            result.append(data)
+        
+        result.sort(key=lambda x: x["average_proficiency"], reverse=True)
+        return result
+
+    def _calculate_org_skill_analysis(self, org_id: int) -> Dict:
+        """Calculate skill metrics at organization level"""
+        from app.models.skill import UserSkill, Skill
+        from app.models.user import User
+        from app.models.user_organizations import user_organizations
+        
+        # Get all users in org
+        user_ids = [r.user_id for r in self.db.query(user_organizations.c.user_id).filter(user_organizations.c.organization_id == org_id).all()]
+        
+        if not user_ids:
+            return {"avg_proficiency": 0, "skill_gaps": [], "skills": []}
+
+        # Aggregate skills
+        skill_metrics = self.db.query(
+            Skill.name,
+            func.avg(UserSkill.level).label('avg_level'),
+            func.count(UserSkill.id).label('member_count')
+        ).join(UserSkill).filter(UserSkill.user_id.in_(user_ids)).group_by(Skill.name).all()
+
+        skills_data = []
+        gaps = []
+        
+        for name, avg_level, count in skill_metrics:
+            proficiency = avg_level * 20
+            
+            skill_info = {
+                "skill_name": name,
+                "proficiency_percentage": round(proficiency, 1),
+                "trend": "up", # Placeholder
+                "trend_delta": "+2%", # Placeholder
+                "members_strong_count": self.db.query(UserSkill).filter(UserSkill.skill_id == Skill.id, Skill.name == name, UserSkill.user_id.in_(user_ids), UserSkill.level >= 3.75).count()
+            }
+            skills_data.append(skill_info)
+            
+            if proficiency < 55:
+                gaps.append(name)
+
+        avg_org_proficiency = sum(s["proficiency_percentage"] for s in skills_data) / len(skills_data) if skills_data else 0
+
+        return {
+            "avg_proficiency": avg_org_proficiency,
+            "skill_gaps": gaps,
+            "skills": skills_data,
+            "improving_skills_count": len([s for s in skills_data if s["trend"] == "up"])
         }
 
     def _get_top_contributors(self, org_id: int) -> List[Dict]:

@@ -69,97 +69,60 @@ class ActivityBreakdown(BaseModel):
 class DashboardResponse(BaseModel):
     """Complete user dashboard response"""
     user_id: int
+    user_name: Optional[str] = None
+    display_name: Optional[str] = None
+    job_title: Optional[str] = None
+    avatar_url: Optional[str] = None
+    online_status: str = "offline"
 
     # Core metrics
-    tasks: TaskMetrics
-    code: CodeMetrics
-    communication: CommunicationMetrics
-    scores: ProductivityScores
-
-    # Streaks
-    current_commit_streak: int
-    longest_commit_streak: int
-    current_task_streak: int
-
-    # Time tracking
-    total_active_days: int
-    last_activity_at: Optional[datetime]
+    metrics: Dict[str, Any]
+    
+    # Skill Analysis
+    skill_analysis: Optional[Dict[str, Any]] = None
 
     # Activity data (for charts)
-    activity_by_day: List[ActivityBreakdown]
+    activity_by_day: Dict[str, Any]
     top_languages: List[Dict[str, Any]]  
     top_projects: List[Dict[str, Any]]   
 
-    # Timestamps
-    updated_at: datetime
+    # Insights
+    ai_insights: Optional[Dict[str, Any]] = None
 
-    model_config = {"from_attributes": True}  # ✅ Pydantic v2 style
+    # Timestamps
+    last_activity_at: Optional[str] = None
+    updated_at: str
+
+    model_config = {"from_attributes": True}
 
 
 # ==============================================================================
 # ORGANIZATION DASHBOARD
 # ==============================================================================
 
-class TeamMetrics(BaseModel):
-    """Team composition metrics"""
-    total_members: int
-    active_members: int
-    activity_rate: float  # Percentage
-
-
-class ProjectMetrics(BaseModel):
-    """Project progress metrics"""
-    total: int
-    active: int
-    completed: int
-    completion_rate: float
-
-
-class TeamPerformance(BaseModel):
-    """Team-wide performance scores"""
-    overall_productivity: float
-    team_collaboration: float
-    code_quality: float
-    velocity: float  # Tasks completed per week
-
-
-class TopContributor(BaseModel):
-    """Top performer data"""
-    user_id: int
-    name: str
-    score: float
-    avatar: Optional[str]
-    contributions: Dict[str, int]
-
-
 class OrgDashboardResponse(BaseModel):
     """Complete organization dashboard response"""
     organization_id: int
+    org_id: int
+    organization_name: str
+    org_name: str
+    org_logo: Optional[str] = None
+    industry: Optional[str] = None
+    subscription_plan: str = "Enterprise"
 
-    # Team metrics
-    team: TeamMetrics
-    projects: ProjectMetrics
-
-    # Aggregate metrics
-    total_tasks: int
-    completed_tasks: int
-    total_commits: int
-    total_pull_requests: int
-    total_messages: int
-
-    # Performance
-    performance: TeamPerformance
+    # Aggregated metrics
+    metrics: Dict[str, Any]
+    
+    # Tracks (Departments)
+    tracks: List[Dict[str, Any]] = []
+    
+    # Skill Analysis
+    skill_analysis: Optional[Dict[str, Any]] = None
 
     # Top performers
-    top_contributors: List[TopContributor]
-    most_active_projects: List[Dict[str, Any]]
-    technology_breakdown: Dict[str, float]
-
-    # Trends (for charts)
-    activity_trend: Dict[str, int]  # Last 30 days
-    velocity_trend: Dict[str, float]  # Last 10 sprints
+    top_contributors: List[Dict[str, Any]] = []
 
     # Timestamps
-    updated_at: datetime
+    updated_at: str
 
     model_config = {"from_attributes": True}

@@ -85,6 +85,26 @@ class Project(Base):
     activities = relationship("Activity", back_populates="project")
     resources = relationship("ProjectResource", back_populates="project", cascade="all, delete-orphan")
 
+    @property
+    def project_image_url(self):
+        return self.project_image
+
+    @property
+    def visibility(self):
+        return "public" if self.is_visible else "private"
+
+    @property
+    def completion_percentage(self):
+        return self.pct_complete
+
+    @property
+    def project_lead_name(self):
+        return self.project_lead.display_name if self.project_lead else "N/A"
+
+    @property
+    def organization_name(self):
+        return self.organization.organization_name if self.organization else "N/A"
+
 
 class ProjectMember(Base):
     __tablename__ = "project_members"

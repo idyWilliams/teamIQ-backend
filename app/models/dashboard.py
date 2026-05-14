@@ -59,6 +59,8 @@ class UserDashboard(Base):
     activity_by_day = Column(JSON, default={})  # {"2025-11-07": {"commits": 5, "tasks": 3}}
     top_languages = Column(JSON, default=[])  # [{"name": "Python", "percentage": 45}]
     top_projects = Column(JSON, default=[])  # [{"name": "Project X", "contribution": 30}]
+    skill_analysis = Column(JSON, default={}) # {"skills": [...], "gaps": [...]}
+    ai_insights = Column(JSON, default={})
 
     # Timestamps
     last_activity_at = Column(DateTime(timezone=True), nullable=True)
@@ -111,6 +113,8 @@ class OrganizationDashboard(Base):
     top_contributors = Column(JSON, default=[])  # [{"user_id": 15, "score": 95}]
     most_active_projects = Column(JSON, default=[])
     technology_breakdown = Column(JSON, default={})
+    track_performance = Column(JSON, default=[]) # Metrics by track/department
+    skill_analysis = Column(JSON, default={}) # Org-wide skill metrics
 
     # Time-based metrics
     activity_trend = Column(JSON, default={})  # Last 30 days

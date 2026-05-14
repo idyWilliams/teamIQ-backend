@@ -43,6 +43,10 @@ class Task(Base):
     last_synced_at = Column(DateTime(timezone=True), nullable=True)  # Last sync time
     sync_enabled = Column(Boolean, default=True)  # Can disable sync for specific tasks
 
+    # Blocker info
+    is_blocked = Column(Boolean, default=False)
+    blocker_details = Column(Text, nullable=True)
+
     # Additional metadata
     due_date = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
@@ -65,6 +69,52 @@ class Task(Base):
     project = relationship("Project", back_populates="tasks")
     comments = relationship("TaskComment", back_populates="task", cascade="all, delete-orphan")
     history = relationship("TaskHistory", back_populates="task", cascade="all, delete-orphan")
+
+    @property
+    def display_task_id(self):
+        return f"#TSK-{self.id}"
+
+    @property
+    def status_color(self):
+        colors = {
+            TaskStatus.BACKLOG: "#6c757d",
+            TaskStatus.TODO: "#007bff",
+            TaskStatus.IN_PROGRESS: "#ffc107",
+            TaskStatus.DONE: "#28a745"
+        }
+        return colors.get(self.status, "#6c757d")
+
+    @property
+    def category_color(self):
+        colors = {
+            TaskPriority.LOW: "#28a745",
+            TaskPriority.MEDIUM: "#17a2b8",
+            TaskPriority.HIGH: "#fd7e14",
+            TaskPriority.URGENT: "#dc3545"
+        }
+        return colors.get(self.priority, "#17a2b8")
+
+    @property
+    def assignees(self):
+        if self.owner:
+            return [{
+                "id": self.owner.id,
+                "name": self.owner.display_name,
+                "avatar_url": self.owner.avatar_url
+            }]
+        return []
+
+    @property
+    def attachment_count(self):
+        return len(self.attachments) if self.attachments else 0
+
+    @property
+    def message_count(self):
+        return self.comment_count
+
+    @property
+    def file_count(self):
+        return self.attachment_count
 
 
 class TaskComment(Base):

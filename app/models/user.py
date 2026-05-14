@@ -58,3 +58,30 @@ class User(Base):
     onboarding_completed = Column(Boolean, default=False)
     onboarding_step = Column(Integer, default=0) 
     onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    @property
+    def display_name(self):
+        return f"{self.first_name} {self.last_name}"
+
+    @property
+    def job_title(self):
+        return self.track or self.role.value
+
+    @property
+    def avatar_url(self):
+        return self.profile_image
+
+    @property
+    def online_status(self):
+        if self.last_seen:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            ls = self.last_seen
+            if ls.tzinfo is None:
+                ls = ls.replace(tzinfo=datetime.timezone.utc)
+            if (now - ls) < datetime.timedelta(minutes=5):
+                return "online"
+        return "offline"
+
+    @property
+    def skills(self):
+        return self.user_skills

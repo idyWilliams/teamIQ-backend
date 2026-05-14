@@ -20,3 +20,11 @@ class UserSkill(Base):
 
     user = relationship("User", back_populates="user_skills")
     skill = relationship("Skill", back_populates="user_skills")
+
+    @property
+    def name(self):
+        return self.skill.name if self.skill else "Unknown"
+
+    @property
+    def proficiency_score(self):
+        return self.level * 20 # Convert 0-5 to 0-100

@@ -30,9 +30,22 @@ class TaskUpdate(BaseModel):
 
 class TaskResponse(TaskBase):
     id: int
+    display_task_id: Optional[str] = None # e.g. #TSK-123
     owner_id: Optional[int]
     organization_id: Optional[int]
     project_id: Optional[int]
+    
+    # UI styling
+    status_color: Optional[str] = None
+    category_color: Optional[str] = None
+    
+    # Assignment
+    assignees: List[dict] = [] # List of user objects with avatars
+
+    # Engagement
+    attachment_count: int = 0
+    message_count: int = 0
+    file_count: int = 0
 
     # External sync fields
     external_id: Optional[str]

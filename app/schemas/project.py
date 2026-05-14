@@ -154,12 +154,17 @@ class ProjectResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    project_image_url: Optional[str] = None # Alias for project_image
+    visibility: str = "public" # "public" or "private"
     owner_id: Optional[int]
     organization_id: Optional[int]
     project_lead_id: Optional[int]
+    project_lead_name: Optional[str] = None
     stacks: Optional[List[str]] = None
     start_date: Optional[datetime.datetime]
     end_date: Optional[datetime.datetime]
+    current_milestone: Optional[str] = "Initial Development"
+    linked_documents: List[Dict[str, str]] = []
 
     # Integration details
     pm_tool: Optional[str]
@@ -167,6 +172,7 @@ class ProjectResponse(BaseModel):
     comm_tool: Optional[str]
 
     status: Optional[ProjectStatus] = None
+    completion_percentage: float = 0.0 # Alias for pct_complete
     pct_complete: float
     is_visible: bool
 
@@ -209,6 +215,8 @@ class IntegratedAppDetail(BaseModel):
     resource_type: str
     provider: str
     connection_id: int
+    logo_url: Optional[str] = None
+    is_active: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -218,12 +226,15 @@ class ProjectListItemResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    project_image_url: Optional[str] = None
+    visibility: str = "public"
     owner_id: Optional[int]
     organization_id: Optional[int]
     project_lead_id: Optional[int]
     stacks: Optional[List[str]] = None
     start_date: Optional[datetime.datetime]
     end_date: Optional[datetime.datetime]
+    current_milestone: Optional[str] = "Initial Development"
 
     # Integration details
     pm_tool: Optional[str]
@@ -231,6 +242,7 @@ class ProjectListItemResponse(BaseModel):
     comm_tool: Optional[str]
 
     status: Optional[ProjectStatus] = None
+    completion_percentage: float = 0.0
     pct_complete: float
     is_visible: bool
 

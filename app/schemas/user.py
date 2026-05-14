@@ -58,6 +58,13 @@ class UserUpdate(BaseModel):
 # --------------------
 # Response Schemas
 # --------------------
+class UserSkillOut(BaseModel):
+    name: str
+    proficiency_score: float # 0-100
+
+    class Config:
+        from_attributes = True
+
 class UserOut(BaseModel):
     """Response schema for users"""
     id: int
@@ -65,15 +72,20 @@ class UserOut(BaseModel):
     username: str
     first_name: str
     last_name: str
+    display_name: Optional[str] = None
     country: str
     role: UserRole
+    job_title: Optional[str] = None # Maps to track
     profile_image: Optional[str] = None
+    avatar_url: Optional[str] = None # Alias for profile_image
     bio: Optional[str] = None
     phone_number: Optional[str] = None
     organization_id: Optional[int] = None
     createdAt: datetime.datetime
-    last_seen: Optional[datetime.datetime] = None,
-    onboarding_completed: bool = False,
+    last_seen: Optional[datetime.datetime] = None
+    onboarding_completed: bool = False
+    online_status: str = "offline" # "online" or "offline"
+    skills: list[UserSkillOut] = []
 
     class Config:
         from_attributes = True
@@ -81,7 +93,12 @@ class UserOut(BaseModel):
     @property
     def is_online(self) -> bool:
         if self.last_seen:
-            return (datetime.datetime.now(datetime.timezone.utc) - self.last_seen) < datetime.timedelta(minutes=5)
+            # Handle both aware and naive datetimes by converting to UTC
+            now = datetime.datetime.now(datetime.timezone.utc)
+            ls = self.last_seen
+            if ls.tzinfo is None:
+                ls = ls.replace(tzinfo=datetime.timezone.utc)
+            return (now - ls) < datetime.timedelta(minutes=5)
         return False
 
     @field_serializer('createdAt')
