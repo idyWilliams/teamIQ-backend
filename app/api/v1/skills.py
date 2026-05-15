@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.skill import UserSkillUpdate, SkillRecommendation, UserSkillOut
 from app.repositories import skill_repository
-from app.schemas.response_model import create_response
+from app.schemas.response_model import create_response, APIResponse
 from app.core.security import get_current_user_or_organization
 from typing import List
 
@@ -12,14 +12,14 @@ from app.models.user import User
 
 router = APIRouter()
 
-@router.get("/my-skills", response_model=List[UserSkillOut])
+@router.get("/my-skills", response_model=APIResponse[List[UserSkillOut]])
 def get_my_skills(db: Session = Depends(get_db), current_user=Depends(get_current_user_or_organization)):
     if not isinstance(current_user, User):
         raise HTTPException(status_code=403, detail="Users only")
     skills = skill_repository.get_user_skills(db, current_user.id)
-    return create_response(success=True, data=[UserSkillOut(skill_name=s.skill.name, level=s.level, updated_at=datetime.utcnow()) for s in skills])
+    return create_response(success=True, message="Skills retrieved successfully", data=[UserSkillOut(skill_name=s.skill.name, level=s.level, updated_at=datetime.utcnow()) for s in skills])
 
-@router.put("/my-skills/{skill_name}")
+@router.put("/my-skills/{skill_name}", response_model=APIResponse)
 def update_skill_level(skill_name: str, update: UserSkillUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user_or_organization)):
     if not isinstance(current_user, User):
         raise HTTPException(status_code=403, detail="Users only")
@@ -27,9 +27,9 @@ def update_skill_level(skill_name: str, update: UserSkillUpdate, db: Session = D
     skill_repository.update_user_skill_level(db, current_user.id, skill.id, update.level)
     return create_response(success=True, message="Skill updated")
 
-@router.get("/recommendations", response_model=List[SkillRecommendation])
+@router.get("/recommendations", response_model=APIResponse[List[SkillRecommendation]])
 def get_recommendations(db: Session = Depends(get_db), current_user=Depends(get_current_user_or_organization)):
     if not isinstance(current_user, User):
         raise HTTPException(status_code=403, detail="Users only")
     recs = skill_repository.get_skill_recommendations(db, current_user.id)
-    return create_response(success=True, data=recs)
+    return create_response(success=True, message="Skill recommendations retrieved successfully", data=recs)

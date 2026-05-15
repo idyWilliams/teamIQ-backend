@@ -11,7 +11,7 @@ from app.schemas.task import (
     TaskWithHistory
 )
 from app.repositories import task_repository
-from app.schemas.response_model import create_response
+from app.schemas.response_model import create_response, APIResponse
 from app.core.security import get_current_user_or_organization
 from app.models.task import Task, TaskStatus
 from app.models.user import User
@@ -26,7 +26,7 @@ router = APIRouter()
 # CREATE TASK (with optional sync to external tool)
 # ==============================================================================
 
-@router.post("/", response_model=TaskResponse)
+@router.post("/", response_model=APIResponse[TaskResponse])
 def create_task(
     task_data: TaskCreate,
     background_tasks: BackgroundTasks,
@@ -72,7 +72,7 @@ def create_task(
 # GET TASKS (with filtering and sync status)
 # ==============================================================================
 
-@router.get("/", response_model=List[TaskResponse])
+@router.get("/", response_model=APIResponse[List[TaskResponse]])
 def get_tasks(
     project_id: Optional[int] = None,
     status: Optional[TaskStatus] = None,
@@ -120,7 +120,7 @@ def get_tasks(
 # GET SINGLE TASK (with history)
 # ==============================================================================
 
-@router.get("/{task_id}", response_model=TaskWithHistory)
+@router.get("/{task_id}", response_model=APIResponse[TaskWithHistory])
 def get_task_detail(
     task_id: int,
     db: Session = Depends(get_db),
@@ -173,7 +173,7 @@ def get_task_detail(
 # UPDATE TASK (with sync to external tool)
 # ==============================================================================
 
-@router.patch("/{task_id}", response_model=TaskResponse)
+@router.patch("/{task_id}", response_model=APIResponse[TaskResponse])
 def update_task(
     task_id: int,
     task_update: TaskUpdate,
@@ -219,7 +219,7 @@ def update_task(
 # MOVE TASK (Kanban drag-drop with sync)
 # ==============================================================================
 
-@router.post("/{task_id}/move", response_model=TaskResponse)
+@router.post("/{task_id}/move", response_model=APIResponse[TaskResponse])
 def move_task(
     task_id: int,
     move_request: TaskMoveRequest,

@@ -181,7 +181,8 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
                 access_token=access_token, 
                 refresh_token=refresh_token,
                 token_type="bearer",
-                organization=OrganizationOut.model_validate(user_obj)
+                organization=OrganizationOut.model_validate(user_obj),
+                onboarding_completed=getattr(user_obj, 'onboarding_completed', False)
             )
         )
     else:  # User
@@ -192,7 +193,8 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
                 access_token=access_token, 
                 refresh_token=refresh_token,
                 token_type="bearer",
-                user=UserOut.model_validate(user_obj)
+                user=UserOut.model_validate(user_obj),
+                onboarding_completed=getattr(user_obj, 'onboarding_completed', False)
             )
         )
 

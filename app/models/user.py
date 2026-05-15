@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.models.organization import UserRole
 from sqlalchemy.sql import func
+import datetime
 
 
 class User(Base):

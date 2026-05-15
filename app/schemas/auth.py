@@ -10,6 +10,7 @@ class Token(BaseModel):
     token_type: str
     user: Optional[UserOut] = None
     organization: Optional[OrganizationOut] = None
+    onboarding_completed: bool = False
 
 
 class RefreshTokenRequest(BaseModel):

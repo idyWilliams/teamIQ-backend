@@ -105,6 +105,10 @@ class UserOut(BaseModel):
     def serialize_dt(self, dt: datetime.datetime, _info):
         return dt.isoformat()
 
+    @field_serializer('last_seen')
+    def serialize_last_seen(self, dt: Optional[datetime.datetime], _info):
+        return dt.isoformat() if dt else None
+
     @field_serializer('role')
     def serialize_role(self, role: UserRole, _info):
         return role.value
