@@ -569,7 +569,7 @@ class VersionControlSync(BaseIntegrationSync):
 
     def _sync_github_repo_info(self, resource):
         """Fetch repository info (languages, etc.)"""
-        repo_path = resource.name
+        repo_path = resource.resource_name
         token = resource.connection.access_token
 
         if not token:
@@ -598,7 +598,7 @@ class VersionControlSync(BaseIntegrationSync):
 
     def _sync_github_commits(self, resource):
         """Fetch commits from GitHub with details"""
-        repo_path = resource.name
+        repo_path = resource.resource_name
         token = resource.connection.access_token
 
         if not token:
@@ -638,7 +638,7 @@ class VersionControlSync(BaseIntegrationSync):
 
     def _sync_github_prs(self, resource):
         """Fetch pull requests from GitHub"""
-        repo_path = resource.name
+        repo_path = resource.resource_name
         token = resource.connection.access_token
 
         if not token:
@@ -719,7 +719,7 @@ class VersionControlSync(BaseIntegrationSync):
             project_id=self.project.id,
             commit_sha=external_id,
             message=commit_data["commit"]["message"],
-            repository=resource.name,
+            repository=resource.resource_name,
             source="github",
             external_url=commit_data.get("html_url"),
             timestamp=datetime.fromisoformat(commit_data["commit"]["author"]["date"].replace("Z", "+00:00")),
