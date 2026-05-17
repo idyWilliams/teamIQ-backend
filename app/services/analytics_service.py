@@ -52,10 +52,18 @@ class AnalyticsService:
         ).all()
 
         if merged_prs:
-            total_cycle_time = sum(
-                (pr.merged_at - pr.created_at).total_seconds() / 3600 
-                for pr in merged_prs
-            )
+            total_cycle_time = 0.0
+            for pr in merged_prs:
+                created = pr.created_at
+                merged = pr.merged_at
+                
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                if merged.tzinfo is None:
+                    merged = merged.replace(tzinfo=timezone.utc)
+                    
+                total_cycle_time += (merged - created).total_seconds() / 3600 
+            
             avg_cycle_time = total_cycle_time / len(merged_prs)
         else:
             avg_cycle_time = 0.0
@@ -113,6 +121,10 @@ class AnalyticsService:
 
         for act in activities:
             ts = act.timestamp
+            # Ensure ts is timezone-aware if it's not
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            
             # Late night: 10 PM to 5 AM
             if ts.hour >= 22 or ts.hour <= 5:
                 late_night_count += 1
