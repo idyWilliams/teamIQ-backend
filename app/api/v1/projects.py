@@ -30,6 +30,7 @@ from app.core.encryption import encrypt_field
 from app.schemas.response_model import create_response, APIResponse
 from app.services.webhook_secret_generator import generate_github_webhook_secret, generate_jira_webhook_secret, generate_slack_signing_secret
 from app.services.webhook_service import get_webhook_service
+from app.services.ai_service import get_ai_service
 from app.tasks.sync_scheduler import sync_single_project, get_scheduler_status
 from app.repositories import project_repository
 from app.schemas.user import UserOut
@@ -264,6 +265,75 @@ def get_project_comprehensive_data(
                 } for r in resources
             ]
         }
+    )
+
+@router.post("/{project_id}/generate-ai-summary")
+def generate_project_ai_summary(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_or_organization)
+):
+    """
+    Generate an AI-powered Project Intelligence Summary.
+    Uses Engineering Manager persona to provide high-signal insights.
+    """
+    project = project_repository.get_project_by_id(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Check authorization
+    if isinstance(current_user, User):
+        user_org_ids = [org.id for org in current_user.organizations]
+        if project.organization_id not in user_org_ids:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif isinstance(current_user, Organization):
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Fetch comprehensive data for the prompt
+    members = db.query(ProjectMember).filter(ProjectMember.project_id == project_id).all()
+    tasks = db.query(Task).options(joinedload(Task.comments)).filter(Task.project_id == project_id).all()
+    
+    from app.models.activity import PullRequestActivity
+    prs = db.query(PullRequestActivity).filter(PullRequestActivity.project_id == project_id).all()
+    
+    activities = db.query(Activity).filter(
+        Activity.project_id == project_id
+    ).order_by(Activity.timestamp.desc()).limit(100).all()
+
+    commits = db.query(CommitActivity).filter(
+        CommitActivity.project_id == project_id
+    ).order_by(CommitActivity.timestamp.desc()).limit(100).all()
+
+    resources = db.query(ProjectResource).filter(ProjectResource.project_id == project_id).all()
+
+    # Calculate completion percentage for the prompt's conditional logic
+    total_tasks = len(tasks)
+    completed_tasks = len([t for t in tasks if t.status == TaskStatus.DONE])
+    completion_percentage = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+
+    # Build the data object for the AI
+    comprehensive_data = {
+        "project": ProjectResponse.model_validate(project).model_dump(),
+        "completion_percentage": completion_percentage,
+        "open_prs_count": len([p for p in prs if p.state == "open"]),
+        "tasks_count": total_tasks,
+        "completed_tasks": completed_tasks,
+        "activities_count": len(activities),
+        "commits_count": len(commits),
+        "members_count": len(members),
+        "recent_activities": [ActivityResponse.model_validate(a).model_dump() for a in activities[:10]],
+        "recent_commits": [CommitActivityResponse.model_validate(c).model_dump() for c in commits[:10]]
+    }
+
+    # Call AI service
+    ai_service = get_ai_service(db)
+    summary_result = ai_service.generate_intelligence_summary(project_id, comprehensive_data)
+
+    return create_response(
+        success="error" not in summary_result,
+        message="Project Intelligence Summary generated",
+        data=summary_result
     )
 
 @router.get("/{project_id}/my-data")

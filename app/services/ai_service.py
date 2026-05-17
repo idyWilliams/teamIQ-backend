@@ -508,6 +508,69 @@ Format as JSON:
             return {"error": str(e)}
 
 
+    def generate_intelligence_summary(self, project_id: int, project_data: Dict) -> Dict:
+        """
+        Generate a high-signal Project Intelligence Summary using the specific EM prompt.
+        """
+        prompt = f"""
+# Role
+You are an expert Engineering Manager with a focus on high-velocity delivery and architectural integrity. Your goal is to transform raw project telemetry (JSON) into a high-signal "Project Intelligence Summary" for the Project Lead.
+
+# Context
+You will be provided with a JSON object: `ComprehensiveProjectData`. 
+
+# Instructions
+Analyze the data and generate a report using the following structure. Maintain a tone that is concise, data-driven, and focused on unblocking the team.
+
+## 1. STRUCTURE & CONTENT
+- ## Quick Pulse: A single, punchy sentence describing the current momentum of the project based on activity levels and milestone progress.
+- ## Critical Path: Identify the single most significant bottleneck or the highest priority task that is currently gating further progress.
+- ## Recent Wins: A bulleted list summarizing the 3 most impactful recent activities (completed PRs, resolved bugs, or achieved milestones).
+- ## Team Guidance: Provide 2-3 pieces of actionable advice for the Project Lead to optimize the current sprint or improve team health.
+
+## 2. CONDITIONAL LOGIC (Dynamic Elements)
+- **Code Review Alert:** If the number of open Pull Requests (PRs) is > 5, explicitly flag a "Code Review Bottleneck" in the Critical Path section.
+- **Timeline Risk:** If `completion_percentage` is < 20% AND the deadline is less than 14 days away, add a "⚠️ Timeline Risk" warning to the Quick Pulse.
+- **Tech Stack Context:** Mention specific technologies or migrations explicitly (e.g., "The [Tech Stack] migration is [X]% complete").
+
+## 3. STYLE GUIDELINES
+- Use Markdown formatting.
+- Avoid corporate jargon or "fluff."
+- Prioritize quantitative data (percentages, counts, dates) over qualitative descriptions.
+- Use active voice (e.g., "Resolved memory leak" instead of "The memory leak was resolved").
+
+# Input Data
+[JSON DATA: {project_data}]
+
+# Output
+Return ONLY the Markdown string ready for frontend rendering.
+"""
+
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1000,
+                temperature=0.7
+            )
+
+            ai_summary = response.choices[0].message.content.strip()
+
+            return {
+                "summary": ai_summary,
+                "project_id": project_id,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+
+        except Exception as e:
+            print(f"Intelligence Summary Error: {e}")
+            return {
+                "summary": "Unable to generate Project Intelligence Summary at this time.",
+                "error": str(e)
+            }
+
 def get_ai_service(db: Session) -> AIInsightsService:
     """Factory function"""
     return AIInsightsService(db)
