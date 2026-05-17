@@ -27,8 +27,8 @@ class Task(Base):
     # Basic fields
     title = Column(String, index=True, nullable=False)
     description = Column(Text, nullable=True)
-    status = Column(Enum(TaskStatus), default=TaskStatus.BACKLOG, index=True)
-    priority = Column(Enum(TaskPriority), default=TaskPriority.MEDIUM)
+    status = Column(Enum(TaskStatus, values_callable=lambda obj: [e.value for e in obj]), default=TaskStatus.BACKLOG, index=True)
+    priority = Column(Enum(TaskPriority, values_callable=lambda obj: [e.value for e in obj]), default=TaskPriority.MEDIUM)
 
     # Ownership
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
