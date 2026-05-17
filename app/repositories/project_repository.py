@@ -25,6 +25,10 @@ def list_projects(db: Session, user_id: int = None, org_id: int = None, status: 
 
 
 
+def get_project_by_id(db: Session, project_id: int):
+    return db.query(Project).filter(Project.id == project_id).first()
+
+
 def get_users_for_project(db: Session, project_id: int):
 
     """Get all users who are members of a specific project."""

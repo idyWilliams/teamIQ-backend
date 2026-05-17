@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-import datetime
+from datetime import datetime, timezone, timedelta
 from app.models.task import TaskStatus, TaskPriority
 from typing import Optional, List
 
@@ -9,7 +9,7 @@ class TaskBase(BaseModel):
     description: Optional[str] = None
     status: Optional[TaskStatus] = TaskStatus.TODO
     priority: Optional[TaskPriority] = TaskPriority.MEDIUM
-    due_date: Optional[datetime.datetime] = None
+    due_date: Optional[datetime] = None
     tags: Optional[List[str]] = None
 
 
@@ -23,7 +23,7 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = None
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None
-    due_date: Optional[datetime.datetime] = None
+    due_date: Optional[datetime] = None
     owner_id: Optional[int] = None
     tags: Optional[List[str]] = None
 
@@ -51,11 +51,11 @@ class TaskResponse(TaskBase):
     external_id: Optional[str]
     external_source: Optional[str]
     external_url: Optional[str]
-    last_synced_at: Optional[datetime.datetime]
+    last_synced_at: Optional[datetime]
 
-    completed_at: Optional[datetime.datetime]
-    createdAt: datetime.datetime
-    updatedAt: Optional[datetime.datetime]
+    completed_at: Optional[datetime]
+    createdAt: datetime
+    updatedAt: Optional[datetime]
 
     class Config:
         from_attributes = True

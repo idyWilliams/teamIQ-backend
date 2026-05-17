@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
-import datetime
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 
 
@@ -30,8 +30,8 @@ class ProjectDetailsCreate(BaseModel):
     description: Optional[str] = None
     project_lead_id: Optional[int] = None
     stacks: List[str] = []
-    start_date: Optional[datetime.datetime] = None
-    end_date: Optional[datetime.datetime] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     linked_documents: List[str] = []
     project_image: Optional[str] = None
     is_visible: bool = True
@@ -106,8 +106,8 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = None
     project_lead_id: Optional[int] = None
     stacks: List[str] = []
-    start_date: Optional[datetime.datetime] = None
-    end_date: Optional[datetime.datetime] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     linked_documents: List[str] = []
     project_image: Optional[str] = None
     is_visible: bool = True
@@ -161,8 +161,8 @@ class ProjectResponse(BaseModel):
     project_lead_id: Optional[int]
     project_lead_name: Optional[str] = None
     stacks: Optional[List[str]] = None
-    start_date: Optional[datetime.datetime]
-    end_date: Optional[datetime.datetime]
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     current_milestone: Optional[str] = "Initial Development"
     linked_documents: List[Dict[str, str]] = []
 
@@ -176,8 +176,8 @@ class ProjectResponse(BaseModel):
     pct_complete: float
     is_visible: bool
 
-    createdAt: datetime.datetime
-    updatedAt: Optional[datetime.datetime] = None
+    createdAt: datetime
+    updatedAt: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -232,8 +232,8 @@ class ProjectListItemResponse(BaseModel):
     organization_id: Optional[int]
     project_lead_id: Optional[int]
     stacks: Optional[List[str]] = None
-    start_date: Optional[datetime.datetime]
-    end_date: Optional[datetime.datetime]
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     current_milestone: Optional[str] = "Initial Development"
 
     # Integration details
@@ -246,8 +246,8 @@ class ProjectListItemResponse(BaseModel):
     pct_complete: float
     is_visible: bool
 
-    createdAt: datetime.datetime
-    updatedAt: Optional[datetime.datetime] = None
+    createdAt: datetime
+    updatedAt: Optional[datetime] = None
 
     # Enhanced fields
     members: List[ProjectMemberDetail] = []

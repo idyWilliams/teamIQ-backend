@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
@@ -16,13 +16,14 @@ from app.schemas.project import (
     CommToolSetup,
     UserPermissionSync,
     ProjectCreate,
-    ProjectCreate,
     ProjectResponse,
     ProjectResourceCreate,
     ProjectListItemResponse,
     ProjectMemberDetail,
     IntegratedAppDetail
 )
+from app.schemas.task import TaskResponse
+from app.schemas.activity import ActivityResponse, CommitActivityResponse, PullRequestActivityResponse
 from app.models.project_resource import ProjectResource
 from app.models.integration import IntegrationConnection
 from app.core.encryption import encrypt_field
@@ -247,12 +248,12 @@ def get_project_comprehensive_data(
         success=True,
         message="Comprehensive project data retrieved",
         data={
-            "project": ProjectResponse.model_validate(project),
+            "project": ProjectResponse.model_validate(project).model_dump(),
             "members": enriched_members,
-            "tasks": tasks,
-            "pull_requests": prs,
-            "activities": activities,
-            "commits": commits,
+            "tasks": [TaskResponse.model_validate(t).model_dump() for t in tasks],
+            "pull_requests": [PullRequestActivityResponse.model_validate(p).model_dump() for p in prs],
+            "activities": [ActivityResponse.model_validate(a).model_dump() for a in activities],
+            "commits": [CommitActivityResponse.model_validate(c).model_dump() for c in commits],
             "resources": [
                 {
                     "id": r.id,
@@ -371,9 +372,9 @@ def get_my_project_data(
                 "total_activities": my_total_activities,
                 "contribution_percentage": round(my_contribution_percentage, 2)
             },
-            "my_tasks": my_tasks,
-            "my_commits": my_commits,
-            "my_activities": my_activities
+            "my_tasks": [TaskResponse.model_validate(t).model_dump() for t in my_tasks],
+            "my_commits": [CommitActivityResponse.model_validate(c).model_dump() for c in my_commits],
+            "my_activities": [ActivityResponse.model_validate(a).model_dump() for a in my_activities]
         }
     )
 
@@ -746,19 +747,19 @@ def get_project_integrated_data(
         "pm_tool": {
             "name": project.pm_tool,
             "tasks_count": len(tasks),
-            "tasks": tasks
+            "tasks": [TaskResponse.model_validate(t).model_dump() for t in tasks]
         },
         "version_control": {
             "name": project.vc_tool,
             "commits_count": len(commits),
-            "commits": commits,
+            "commits": [CommitActivityResponse.model_validate(c).model_dump() for c in commits],
             "pull_requests_count": len(prs),
-            "pull_requests": prs
+            "pull_requests": [PullRequestActivityResponse.model_validate(p).model_dump() for p in prs]
         },
         "communication": {
             "name": project.comm_tool,
             "messages_count": len(messages),
-            "messages": messages
+            "messages": [ActivityResponse.model_validate(m).model_dump() for m in messages]
         }
     }
 
@@ -1273,7 +1274,7 @@ def update_project(
         if hasattr(project, field):
             setattr(project, field, value)
 
-    project.updatedAt = datetime.utcnow()
+    project.updatedAt = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(project)
