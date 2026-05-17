@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Float, Enum, Text, Boolean, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
-import datetime
+from datetime import datetime, timezone
 import enum
 
 
@@ -63,8 +63,8 @@ class Project(Base):
     status = Column(Enum(ProjectStatus), default=ProjectStatus.ACTIVE)
     pct_complete = Column(Float, default=0.0)
 
-    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
-    updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    createdAt = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updatedAt = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     owner = relationship(
@@ -115,7 +115,7 @@ class ProjectMember(Base):
     role = Column(String, nullable=True)
     external_mappings = Column(JSON, nullable=True)
 
-    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+    createdAt = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     project = relationship("Project", back_populates="members")
     user = relationship("User")

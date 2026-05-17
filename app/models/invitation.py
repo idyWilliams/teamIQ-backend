@@ -6,7 +6,7 @@ from sqlalchemy.types import Enum as SQLEnum
 from sqlalchemy.sql import func
 from app.core.database import Base
 from app.models.organization import UserRole
-import datetime
+from datetime import datetime, timezone, timedelta
 
 
 class Invitation(Base):
@@ -27,7 +27,7 @@ class Invitation(Base):
     invitation_code = Column(String, unique=True, index=True, nullable=False)
     expires_at = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.datetime.utcnow() + datetime.timedelta(hours=48)
+        default=lambda: datetime.now(timezone.utc) + timedelta(hours=48)
     )
     accepted = Column(Boolean, default=False)
     organization_id = Column(Integer, ForeignKey("organizations.id"))
@@ -45,7 +45,7 @@ class Invitation(Base):
             self.status = "accepted"
         elif self.status == "revoked":
             pass  # Keep revoked status
-        elif self.expires_at < datetime.datetime.now(datetime.timezone.utc):
+        elif self.expires_at < datetime.now(timezone.utc):
             self.status = "expired"
-        elif not self.is_used and self.expires_at > datetime.datetime.now(datetime.timezone.utc):
+        elif not self.is_used and self.expires_at > datetime.now(timezone.utc):
             self.status = "pending"

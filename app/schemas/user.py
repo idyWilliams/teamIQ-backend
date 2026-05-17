@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo, field
 from typing import Optional
 
 from app.models.organization import UserRole
-import datetime
+from datetime import datetime, timezone, timedelta
 import re
 
 
@@ -81,8 +81,8 @@ class UserOut(BaseModel):
     bio: Optional[str] = None
     phone_number: Optional[str] = None
     organization_id: Optional[int] = None
-    createdAt: datetime.datetime
-    last_seen: Optional[datetime.datetime] = None
+    createdAt: datetime
+    last_seen: Optional[datetime] = None
     onboarding_completed: bool = False
     online_status: str = "offline" # "online" or "offline"
     skills: list[UserSkillOut] = []
@@ -94,19 +94,19 @@ class UserOut(BaseModel):
     def is_online(self) -> bool:
         if self.last_seen:
             # Handle both aware and naive datetimes by converting to UTC
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.now(timezone.utc)
             ls = self.last_seen
             if ls.tzinfo is None:
-                ls = ls.replace(tzinfo=datetime.timezone.utc)
-            return (now - ls) < datetime.timedelta(minutes=5)
+                ls = ls.replace(tzinfo=timezone.utc)
+            return (now - ls) < timedelta(minutes=5)
         return False
 
     @field_serializer('createdAt')
-    def serialize_dt(self, dt: datetime.datetime, _info):
+    def serialize_dt(self, dt: datetime, _info):
         return dt.isoformat()
 
     @field_serializer('last_seen')
-    def serialize_last_seen(self, dt: Optional[datetime.datetime], _info):
+    def serialize_last_seen(self, dt: Optional[datetime], _info):
         return dt.isoformat() if dt else None
 
     @field_serializer('role')

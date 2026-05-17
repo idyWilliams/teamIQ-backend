@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models.invitation import Invitation
 from app.repositories.user_org_repository import link_user_to_org
 from app.schemas.invitation import InvitationCreate
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from app.core.logger import logger
 import uuid
@@ -14,7 +14,7 @@ import uuid
 def create_invitation(db: Session, invitation: InvitationCreate, organization_id: int) -> Invitation:
     """Creates a new invitation that expires in 48 hours"""
     invitation_code = str(uuid.uuid4())
-    expires_at = datetime.utcnow() + timedelta(hours=48)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=48)
 
     db_invitation = Invitation(
         email=invitation.email.lower().strip(),
@@ -93,7 +93,7 @@ def get_active_invite_by_email_and_org(db: Session, email: str, organization_id:
             Invitation.email == email.lower(),
             Invitation.organization_id == organization_id,
             Invitation.is_used == False,
-            Invitation.expires_at > datetime.utcnow()
+            Invitation.expires_at > datetime.now(timezone.utc)
         )
         .first()
     )
@@ -112,7 +112,7 @@ def accept_invitation(db: Session, invitation_code: str, user_id: int):
             detail="This invitation has already been used"
         )
 
-    if invitation.expires_at < datetime.utcnow():
+    if invitation.expires_at < datetime.now(timezone.utc):
         # Update status to expired
         invitation.status = "expired"
         db.commit()
@@ -124,7 +124,7 @@ def accept_invitation(db: Session, invitation_code: str, user_id: int):
     # Mark invitation as used and accepted
     invitation.is_used = True
     invitation.accepted = True
-    invitation.accepted_at = datetime.utcnow()
+    invitation.accepted_at = datetime.now(timezone.utc)
     invitation.status = "accepted"
 
     # Link user to organization

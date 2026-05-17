@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.integration import IntegrationConnection
 
 def debug_log(msg):
     try:
-        with open("/Users/mac/Documents/teamIQ-backend/debug_integration.log", "a") as f:
-            f.write(f"{datetime.utcnow()} - {msg}\n")
+        with open("debug_integration.log", "a") as f:
+            f.write(f"{datetime.now(timezone.utc)} - {msg}\n")
     except Exception:
         pass
 

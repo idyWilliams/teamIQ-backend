@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.models.organization import UserRole
 from sqlalchemy.sql import func
-import datetime
+from datetime import datetime, timezone, timedelta
 
 
 class User(Base):
@@ -75,11 +75,11 @@ class User(Base):
     @property
     def online_status(self):
         if self.last_seen:
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.now(timezone.utc)
             ls = self.last_seen
             if ls.tzinfo is None:
-                ls = ls.replace(tzinfo=datetime.timezone.utc)
-            if (now - ls) < datetime.timedelta(minutes=5):
+                ls = ls.replace(tzinfo=timezone.utc)
+            if (now - ls) < timedelta(minutes=5):
                 return "online"
         return "offline"
 

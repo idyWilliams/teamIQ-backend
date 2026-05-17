@@ -1,7 +1,7 @@
 # models/org_integration_credential.py
 from sqlalchemy import Column, Integer, String, DateTime
 from app.core.database import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 class OrgIntegrationCredential(Base):
     __tablename__ = "org_integration_credentials"
@@ -11,6 +11,6 @@ class OrgIntegrationCredential(Base):
     client_id = Column(String, nullable=True)
     client_secret = Column(String, nullable=True)
     api_key = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
-import datetime
+from datetime import datetime, timezone
 
 class ProjectResource(Base):
     __tablename__ = "project_resources"
@@ -15,8 +15,8 @@ class ProjectResource(Base):
     resource_name = Column(String, nullable=False)
     resource_metadata = Column(JSON, nullable=True)  # Renamed from metadata to avoid conflict # Store extra info like URL, description
 
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     project = relationship("Project", back_populates="resources")
