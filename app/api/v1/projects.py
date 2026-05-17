@@ -31,6 +31,7 @@ from app.schemas.response_model import create_response, APIResponse
 from app.services.webhook_secret_generator import generate_github_webhook_secret, generate_jira_webhook_secret, generate_slack_signing_secret
 from app.services.webhook_service import get_webhook_service
 from app.services.ai_service import get_ai_service
+from app.services.analytics_service import get_analytics_service
 from app.tasks.sync_scheduler import sync_single_project, get_scheduler_status
 from app.repositories import project_repository
 from app.schemas.user import UserOut
@@ -245,6 +246,10 @@ def get_project_comprehensive_data(
             "external_mappings": member.external_mappings
         })
 
+    # Fetch engineering health metrics
+    analytics_service = get_analytics_service(db)
+    engineering_health = analytics_service.get_engineering_health(project_id)
+
     return create_response(
         success=True,
         message="Comprehensive project data retrieved",
@@ -263,7 +268,8 @@ def get_project_comprehensive_data(
                     "connection_id": r.connection_id,
                     "provider": r.connection.provider if r.connection else None
                 } for r in resources
-            ]
+            ],
+            "engineering_health": engineering_health.model_dump()
         }
     )
 
