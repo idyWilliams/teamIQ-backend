@@ -12,6 +12,15 @@ class ProjectStatus(str, enum.Enum):
     ON_HOLD = "on_hold"
 
 
+class ProjectType(str, enum.Enum):
+    SOFTWARE_DEVELOPMENT = "software_development"
+    BUSINESS_MANAGEMENT = "business_management"
+    STRATEGY_CONSULTING = "strategy_consulting"
+    MARKETING_CREATIVE = "marketing_creative"
+    RESEARCH_DEVELOPMENT = "research_development"
+    OTHER = "other"
+
+
 class IntegrationMethod(str, enum.Enum):
     OAUTH2 = "oauth2"
     API_KEY = "api_key"
@@ -26,11 +35,15 @@ class Project(Base):
     # Step 1: Project Details
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+    project_type = Column(Enum(ProjectType), default=ProjectType.SOFTWARE_DEVELOPMENT)
+    industry = Column(String, nullable=True)  # e.g. Fintech, Healthcare
+    methodology = Column(String, nullable=True)  # e.g. Agile, Scrum, Waterfall
+    
     project_lead_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    stacks = Column(JSON, nullable=True)
+    stacks = Column(JSON, nullable=True)  # Still useful for dev projects
     start_date = Column(DateTime, nullable=True)
     end_date = Column(DateTime, nullable=True)
-    linked_documents = Column(JSON, nullable=True)
+    linked_documents = Column(JSON, nullable=True)  # Array of {name, url, type, size}
     project_image = Column(String, nullable=True)
     is_visible = Column(Boolean, default=True)
 

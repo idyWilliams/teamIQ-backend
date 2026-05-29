@@ -15,13 +15,6 @@ supabase: Client = create_client(
 async def upload_image_to_supabase(file: UploadFile, folder: str = "general") -> str:
     """
     Upload image to Supabase Storage and return public URL
-
-    Args:
-        file: The uploaded file from FastAPI
-        folder: Folder name in the bucket (e.g., 'profiles', 'organizations', 'projects')
-
-    Returns:
-        str: Public URL of the uploaded image
     """
     try:
         # Validate file type
@@ -35,10 +28,10 @@ async def upload_image_to_supabase(file: UploadFile, folder: str = "general") ->
         # Read file content
         file_content = await file.read()
 
-        # Validate file size (max 5MB)
-        max_size = 5 * 1024 * 1024  # 5MB
+        # Validate file size (max 10MB for images)
+        max_size = 10 * 1024 * 1024  # 10MB
         if len(file_content) > max_size:
-            raise HTTPException(status_code=400, detail="File size exceeds 5MB limit")
+            raise HTTPException(status_code=400, detail="Image size exceeds 10MB limit")
 
         # Generate unique filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -47,13 +40,13 @@ async def upload_image_to_supabase(file: UploadFile, folder: str = "general") ->
         unique_filename = f"{folder}/{timestamp}_{unique_id}.{file_extension}"
 
         # Upload to Supabase Storage
-        response = supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).upload(
+        supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).upload(
             path=unique_filename,
             file=file_content,
             file_options={
                 "content-type": file.content_type,
                 "cache-control": "3600",
-                "upsert": "false"  # Prevent overwriting
+                "upsert": "false"
             }
         )
 
@@ -68,6 +61,83 @@ async def upload_image_to_supabase(file: UploadFile, folder: str = "general") ->
     except Exception as e:
         print(f"❌ Upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+async def upload_document_to_supabase(file: UploadFile, folder: str = "documents") -> dict:
+    """
+    Upload a document (PDF, Doc, etc.) to Supabase Storage and return its metadata
+
+    Returns:
+        dict: {name, url, type, size, uploaded_at}
+    """
+    try:
+        # Validate file type
+        allowed_types = [
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "text/plain",
+            "text/csv"
+        ]
+        
+        if file.content_type not in allowed_types:
+            # Fallback check for extensions if content_type is generic
+            ext = file.filename.split(".")[-1].lower()
+            allowed_exts = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"]
+            if ext not in allowed_exts:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid file type. Allowed: PDF, Word, Excel, PPT, TXT, CSV"
+                )
+
+        # Read file content
+        file_content = await file.read()
+        file_size = len(file_content)
+
+        # Validate file size (max 25MB for documents)
+        max_size = 25 * 1024 * 1024  # 25MB
+        if file_size > max_size:
+            raise HTTPException(status_code=400, detail="Document size exceeds 25MB limit")
+
+        # Generate unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        file_extension = file.filename.split(".")[-1] if "." in file.filename else "doc"
+        unique_filename = f"{folder}/{timestamp}_{unique_id}.{file_extension}"
+
+        # Upload to Supabase Storage
+        supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).upload(
+            path=unique_filename,
+            file=file_content,
+            file_options={
+                "content-type": file.content_type,
+                "cache-control": "3600",
+                "upsert": "false"
+            }
+        )
+
+        # Get public URL
+        public_url = supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).get_public_url(unique_filename)
+
+        print(f"✅ Document uploaded: {public_url}")
+        
+        return {
+            "name": file.filename,
+            "url": public_url,
+            "type": file.content_type,
+            "size": file_size,
+            "uploaded_at": datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Document upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Document upload failed: {str(e)}")
 
 
 async def delete_image_from_supabase(image_url: str) -> bool:

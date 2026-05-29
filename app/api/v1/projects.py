@@ -538,6 +538,9 @@ def create_complete_project(
         # Step 1
         name=project_data.name,
         description=project_data.description,
+        project_type=project_data.project_type,
+        industry=project_data.industry,
+        methodology=project_data.methodology,
         owner_id=owner_id,
         organization_id=organization_id,
         project_lead_id=project_data.project_lead_id,

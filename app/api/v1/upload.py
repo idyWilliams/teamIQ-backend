@@ -130,18 +130,12 @@ async def upload_image(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
-# Optional: Endpoint to delete an image
 @router.delete("/image")
 async def delete_image(
     image_url: str = Query(..., description="Full URL of the image to delete")
 ):
     """
     🗑️ Delete an image from Supabase Storage
-
-    **Usage:**
-    ```
-    DELETE /api/v1/upload/image?image_url=https://xxx.supabase.co/storage/.../file.jpg
-    ```
     """
     from app.services.storage_service import delete_image_from_supabase
 
@@ -158,3 +152,45 @@ async def delete_image(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+
+@router.post("/document")
+async def upload_document(
+    file: UploadFile = File(...),
+    project_id: int = Query(None, description="Optional: ID of the project this document belongs to"),
+    db: Session = Depends(get_db)
+):
+    """
+    📄 Document Upload Endpoint
+
+    Upload a project-related document (PDF, Word, etc.) and get back its metadata and URL.
+    """
+    from app.services.storage_service import upload_document_to_supabase
+    from app.models.project import Project
+
+    try:
+        # Upload to Supabase Storage
+        doc_data = await upload_document_to_supabase(file, folder="project_docs")
+
+        # If project_id is provided, we can optionally link it immediately
+        # (Though frontend might prefer to do this as part of project creation/update)
+        if project_id:
+            project = db.query(Project).filter(Project.id == project_id).first()
+            if project:
+                current_docs = project.linked_documents or []
+                current_docs.append(doc_data)
+                project.linked_documents = current_docs
+                db.commit()
+                doc_data["project_linked"] = True
+
+        return {
+            "success": True,
+            "message": "Document uploaded successfully",
+            "data": doc_data
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Document upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")

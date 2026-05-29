@@ -11,6 +11,15 @@ class ProjectStatus(str, Enum):
     ON_HOLD = "on_hold"
 
 
+class ProjectType(str, Enum):
+    SOFTWARE_DEVELOPMENT = "software_development"
+    BUSINESS_MANAGEMENT = "business_management"
+    STRATEGY_CONSULTING = "strategy_consulting"
+    MARKETING_CREATIVE = "marketing_creative"
+    RESEARCH_DEVELOPMENT = "research_development"
+    OTHER = "other"
+
+
 class IntegrationMethod(str, Enum):
     OAUTH2 = "oauth2"
     API_KEY = "api_key"
@@ -28,11 +37,14 @@ class VCTool(str, Enum):
 class ProjectDetailsCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    project_type: ProjectType = ProjectType.SOFTWARE_DEVELOPMENT
+    industry: Optional[str] = None
+    methodology: Optional[str] = None
     project_lead_id: Optional[int] = None
     stacks: List[str] = []
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    linked_documents: List[str] = []
+    linked_documents: List[Dict] = []
     project_image: Optional[str] = None
     is_visible: bool = True
 
@@ -104,11 +116,14 @@ class ProjectCreate(BaseModel):
     # Step 1: Required
     name: str
     description: Optional[str] = None
+    project_type: ProjectType = ProjectType.SOFTWARE_DEVELOPMENT
+    industry: Optional[str] = None
+    methodology: Optional[str] = None
     project_lead_id: Optional[int] = None
     stacks: List[str] = []
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    linked_documents: List[str] = []
+    linked_documents: List[Dict] = []
     project_image: Optional[str] = None
     is_visible: bool = True
 
@@ -154,6 +169,9 @@ class ProjectResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    project_type: ProjectType
+    industry: Optional[str] = None
+    methodology: Optional[str] = None
     project_image_url: Optional[str] = None # Alias for project_image
     visibility: str = "public" # "public" or "private"
     owner_id: Optional[int]
@@ -164,7 +182,7 @@ class ProjectResponse(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     current_milestone: Optional[str] = "Initial Development"
-    linked_documents: List[Dict[str, str]] = []
+    linked_documents: List[Dict] = []
 
     # Integration details
     pm_tool: Optional[str]
@@ -226,6 +244,9 @@ class ProjectListItemResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    project_type: ProjectType
+    industry: Optional[str] = None
+    methodology: Optional[str] = None
     project_image_url: Optional[str] = None
     visibility: str = "public"
     owner_id: Optional[int]
