@@ -99,3 +99,5 @@ numpy>=1.23.0
 scipy>=1.8.0
 openai==1.54.3
 sib-api-v3-sdk==7.6.0
+PyPDF2==3.0.1
+python-docx==1.1.0

@@ -164,16 +164,49 @@ async def upload_document(
     📄 Document Upload Endpoint
 
     Upload a project-related document (PDF, Word, etc.) and get back its metadata and URL.
+    Also extracts text content for AI processing.
     """
     from app.services.storage_service import upload_document_to_supabase
     from app.models.project import Project
+    from app.core.document_utils import extract_text_from_file
 
     try:
+        # Extract text content first (since reading the file might consume the stream)
+        # Actually, we should read the file once and pass the bytes.
+        # document_utils already handles reading and extracting.
+        # But wait, we need the file for Supabase too.
+        
+        # Save a copy of the file for Supabase
+        import copy
+        # Workaround: Upload document to supabase first, then extract text?
+        # Or better: read it once, use it twice.
+        
+        # We need to be careful with the file pointer.
+        file_content = await file.read()
+        await file.seek(0) # Reset pointer for Supabase upload if needed
+        
         # Upload to Supabase Storage
         doc_data = await upload_document_to_supabase(file, folder="project_docs")
 
+        # Now extract text from the content we already read
+        # (Need to modify document_utils or just use its helper)
+        from app.core.document_utils import extract_text_from_pdf, extract_text_from_docx, extract_text_from_csv
+        
+        extracted_text = ""
+        filename = file.filename.lower()
+        if filename.endswith(".pdf"):
+            extracted_text = extract_text_from_pdf(file_content)
+        elif filename.endswith((".docx", ".doc")):
+            extracted_text = extract_text_from_docx(file_content)
+        elif filename.endswith(".csv"):
+            extracted_text = extract_text_from_csv(file_content)
+        elif filename.endswith(".txt"):
+            extracted_text = file_content.decode("utf-8", errors="ignore")
+        
+        # Add extracted text to metadata (limit size for DB)
+        doc_data["extracted_text"] = extracted_text[:100000] # Limit to 100k chars for now
+
         # If project_id is provided, we can optionally link it immediately
-        # (Though frontend might prefer to do this as part of project creation/update)
         if project_id:
             project = db.query(Project).filter(Project.id == project_id).first()
             if project:
@@ -185,7 +218,7 @@ async def upload_document(
 
         return {
             "success": True,
-            "message": "Document uploaded successfully",
+            "message": "Document uploaded and processed successfully",
             "data": doc_data
         }
 

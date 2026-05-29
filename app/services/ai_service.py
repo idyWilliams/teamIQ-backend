@@ -1,28 +1,29 @@
 """
 AI Service for Generating Insights and Predictions
-Uses OpenAI GPT or Anthropic Claude for analysis
+Uses OpenAI GPT-4 for analysis
 """
 
-from typing import Dict, Optional
-import openai
-from datetime import datetime, timedelta
+from typing import Dict, Optional, List
+from openai import OpenAI
+import json
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.user import User
-from app.models.project import Project
+from app.models.project import Project, ProjectMember
 from app.models.task import Task
 from app.models.activity import Activity, CommitActivity
 
 
 class AIInsightsService:
     """
-    Generates AI-powered insights using GPT-4
-    Analyzes user behavior, productivity patterns, and team dynamics
+    Generates AI-powered insights using the latest OpenAI API.
+    Analyzes project telemetry, team behavior, and uploaded documents.
     """
 
     def __init__(self, db: Session):
         self.db = db
-        openai.api_key = settings.OPENAI_API_KEY
+        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
     # =========================================================================
     # PROJECT AI SUMMARY
@@ -31,7 +32,6 @@ class AIInsightsService:
     def generate_project_summary(self, project_id: int) -> Dict:
         """
         Generate AI summary for project overview page
-        Analyzes: tasks, commits, team activity, timeline
         """
         project = self.db.query(Project).filter(Project.id == project_id).first()
 
@@ -42,70 +42,63 @@ class AIInsightsService:
         tasks = self.db.query(Task).filter(Task.project_id == project_id).all()
         activities = self.db.query(Activity).filter(
             Activity.project_id == project_id,
-            Activity.timestamp >= datetime.utcnow() - timedelta(days=30)
+            Activity.timestamp >= datetime.now(timezone.utc) - timedelta(days=30)
         ).all()
 
         commits = self.db.query(CommitActivity).filter(
             CommitActivity.project_id == project_id,
-            CommitActivity.timestamp >= datetime.utcnow() - timedelta(days=30)
+            CommitActivity.timestamp >= datetime.now(timezone.utc) - timedelta(days=30)
         ).all()
 
         # Calculate metrics
         total_tasks = len(tasks)
-        completed_tasks = sum(1 for t in tasks if t.status.value == "DONE")
-        in_progress_tasks = sum(1 for t in tasks if t.status.value == "IN_PROGRESS")
-        overdue_tasks = sum(1 for t in tasks if t.due_date and t.due_date < datetime.utcnow() and t.status.value != "DONE")
-
-        total_commits = len(commits)
-        total_activities = len(activities)
-
-        # Calculate velocity (tasks completed per week)
-        weeks_elapsed = (datetime.utcnow() - project.start_date).days / 7 if project.start_date else 4
+        completed_tasks = sum(1 for t in tasks if t.status == "DONE")
+        in_progress_tasks = sum(1 for t in tasks if t.status == "IN_PROGRESS")
+        
+        # Velocity calculation
+        start_date = project.start_date.replace(tzinfo=timezone.utc) if project.start_date else datetime.now(timezone.utc) - timedelta(days=30)
+        weeks_elapsed = (datetime.now(timezone.utc) - start_date).days / 7
         velocity = completed_tasks / weeks_elapsed if weeks_elapsed > 0 else 0
 
-        # Prepare context for AI
+        # Incorporate Document Knowledge
+        document_context = ""
+        if project.linked_documents:
+            document_context = "\n### Project Documents Context:\n"
+            for doc in project.linked_documents:
+                if isinstance(doc, dict) and "extracted_text" in doc:
+                    # Only take a snippet of each doc to avoid token limits
+                    text_snippet = doc["extracted_text"][:2000]
+                    document_context += f"- Document '{doc.get('name')}': {text_snippet}...\n"
+
         context = f"""
 Project: {project.name}
+Type: {project.project_type}
+Industry: {project.industry}
+Methodology: {project.methodology}
 Description: {project.description}
-Timeline: {project.start_date} to {project.end_date}
-Duration: {weeks_elapsed:.1f} weeks elapsed
 
 Current Status:
 - Total Tasks: {total_tasks}
-- Completed: {completed_tasks} ({(completed_tasks/total_tasks*100) if total_tasks > 0 else 0:.1f}%)
+- Completed: {completed_tasks}
 - In Progress: {in_progress_tasks}
-- Overdue: {overdue_tasks}
 - Velocity: {velocity:.1f} tasks/week
 
 Activity (Last 30 days):
-- Commits: {total_commits}
-- Team Activities: {total_activities}
-
-Technology Stack: {', '.join(project.stacks) if project.stacks else 'Not specified'}
+- Commits: {len(commits)}
+- Team Activities: {len(activities)}
+{document_context}
 """
 
-        # Call GPT-4 for summary
         try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are an expert project manager and data analyst.
-Generate a concise, insightful project summary in 2-3 sentences that highlights:
-1. Current project health (on track, at risk, or behind)
-2. Key achievements or concerns
-3. Actionable recommendation
-
-Be direct, data-driven, and professional. Use metrics provided."""
+                        "content": "You are an expert project manager. Analyze the provided project data and documents to give a high-level summary."
                     },
-                    {
-                        "role": "user",
-                        "content": context
-                    }
-                ],
-                max_tokens=150,
-                temperature=0.7
+                    {"role": "user", "content": context}
+                ]
             )
 
             ai_summary = response.choices[0].message.content.strip()
@@ -115,40 +108,14 @@ Be direct, data-driven, and professional. Use metrics provided."""
                 "metrics": {
                     "total_tasks": total_tasks,
                     "completed_tasks": completed_tasks,
-                    "completion_rate": round((completed_tasks/total_tasks*100) if total_tasks > 0 else 0, 1),
-                    "overdue_tasks": overdue_tasks,
-                    "velocity": round(velocity, 2),
-                    "total_commits": total_commits,
-                    "team_activity_score": total_activities
+                    "velocity": round(velocity, 2)
                 },
-                "health_status": self._calculate_project_health(
-                    completed_tasks, total_tasks, overdue_tasks, velocity
-                ),
-                "generated_at": datetime.utcnow().isoformat()
+                "generated_at": datetime.now(timezone.utc).isoformat()
             }
 
         except Exception as e:
             print(f"AI Summary Error: {e}")
-            return {
-                "summary": "Unable to generate AI summary at this time. Project metrics are available below.",
-                "error": str(e)
-            }
-
-    def _calculate_project_health(self, completed: int, total: int, overdue: int, velocity: float) -> str:
-        """Calculate overall project health status"""
-        if total == 0:
-            return "just_started"
-
-        completion_rate = (completed / total) * 100
-
-        if overdue > 5 or (completion_rate < 30 and velocity < 2):
-            return "at_risk"
-        elif completion_rate > 70 and overdue < 2:
-            return "on_track"
-        elif completion_rate >= 50:
-            return "healthy"
-        else:
-            return "needs_attention"
+            return {"error": str(e)}
 
     # =========================================================================
     # USER PERFORMANCE ANALYSIS
@@ -157,157 +124,43 @@ Be direct, data-driven, and professional. Use metrics provided."""
     def analyze_user_performance(self, user_id: int, project_id: Optional[int] = None) -> Dict:
         """
         Deep AI analysis of individual user performance
-        Provides: strengths, weaknesses, predictions, recommendations
         """
         user = self.db.query(User).filter(User.id == user_id).first()
-
         if not user:
             return {"error": "User not found"}
 
-        # Gather user data (last 90 days)
-        start_date = datetime.utcnow() - timedelta(days=90)
-
+        start_date = datetime.now(timezone.utc) - timedelta(days=90)
+        
         query_tasks = self.db.query(Task).filter(Task.owner_id == user_id)
         if project_id:
             query_tasks = query_tasks.filter(Task.project_id == project_id)
-
         tasks = query_tasks.filter(Task.created_at >= start_date).all()
 
         query_commits = self.db.query(CommitActivity).filter(CommitActivity.user_id == user_id)
         if project_id:
             query_commits = query_commits.filter(CommitActivity.project_id == project_id)
-
         commits = query_commits.filter(CommitActivity.timestamp >= start_date).all()
 
-        query_activities = self.db.query(Activity).filter(Activity.user_id == user_id)
-        if project_id:
-            query_activities = query_activities.filter(Activity.project_id == project_id)
-
-        activities = query_activities.filter(Activity.timestamp >= start_date).all()
-
-        # Calculate detailed metrics
-        completed_tasks = [t for t in tasks if t.status.value == "DONE"]
-        overdue_tasks = [t for t in tasks if t.due_date and t.due_date < datetime.utcnow() and t.status.value != "DONE"]
-
-        # Task completion patterns
-        task_completion_times = []
-        for task in completed_tasks:
-            if task.completed_at and task.created_at:
-                completion_time = (task.completed_at - task.created_at).total_seconds() / 3600  # hours
-                task_completion_times.append(completion_time)
-
-        avg_completion_time = sum(task_completion_times) / len(task_completion_times) if task_completion_times else 0
-
-        # Commit patterns (lines of code, frequency)
-        total_lines_added = sum(c.additions for c in commits if c.additions)
-        total_lines_deleted = sum(c.deletions for c in commits if c.deletions)
-        commits_per_week = len(commits) / 12  # 90 days / 7 days
-
-        # Activity patterns
-        messages_sent = len([a for a in activities if a.type == "message"])
-        reactions_given = len([a for a in activities if a.type == "reaction"])
-
-        # Working hours analysis (commit timestamps)
-        commit_hours = [c.timestamp.hour for c in commits if c.timestamp]
-        peak_hours = max(set(commit_hours), key=commit_hours.count) if commit_hours else None
-
-        # Prepare context for AI analysis
         context = f"""
 User: {user.first_name} {user.last_name}
 Role: {user.role}
-Analysis Period: Last 90 days
-
-Task Performance:
-- Total Tasks: {len(tasks)}
-- Completed: {len(completed_tasks)}
-- Completion Rate: {(len(completed_tasks)/len(tasks)*100) if len(tasks) > 0 else 0:.1f}%
-- Overdue: {len(overdue_tasks)}
-- Average Completion Time: {avg_completion_time:.1f} hours
-
-Code Contribution:
-- Total Commits: {len(commits)}
-- Commits per Week: {commits_per_week:.1f}
-- Lines Added: {total_lines_added}
-- Lines Deleted: {total_lines_deleted}
-- Most Active Hour: {peak_hours}:00 UTC
-
-Collaboration:
-- Messages Sent: {messages_sent}
-- Reactions Given: {reactions_given}
-- Team Engagement Score: {(messages_sent + reactions_given) / 90:.2f} per day
-
-Technology Stack: {', '.join(user.skills) if user.skills else 'Not specified'}
+Tasks: {len(tasks)} (Completed: {sum(1 for t in tasks if t.status == 'DONE')})
+Commits: {len(commits)}
+Skills: {', '.join(user.skills) if user.skills else 'N/A'}
 """
 
-        # Call GPT-4 for analysis
         try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                response_format={"type": "json_object"},
                 messages=[
-                    {
-                        "role": "system",
-                        "content": """You are an expert HR analyst and technical lead. Analyze this developer's performance data and provide:
-
-1. STRENGTHS (2-3 bullet points)
-2. AREAS FOR IMPROVEMENT (2-3 bullet points)
-3. WORKING STYLE (1-2 sentences describing patterns)
-4. PREDICTIONS (What will happen if current trends continue)
-5. RECOMMENDATIONS (Specific, actionable advice for growth)
-
-Format as JSON:
-{
-  "strengths": ["...", "..."],
-  "improvements": ["...", "..."],
-  "working_style": "...",
-  "predictions": {
-    "3_months": "...",
-    "6_months": "..."
-  },
-  "recommendations": {
-    "immediate": ["...", "..."],
-    "long_term": ["...", "..."]
-  },
-  "task_fit": {
-    "best_suited_for": ["...", "..."],
-    "avoid_assigning": ["...", "..."]
-  }
-}
-
-Be honest but constructive. Use data to support conclusions."""
-                    },
-                    {
-                        "role": "user",
-                        "content": context
-                    }
-                ],
-                max_tokens=800,
-                temperature=0.7
+                    {"role": "system", "content": "You are an expert HR analyst. Analyze the performance data and return a JSON report with strengths, improvements, working_style, and recommendations."},
+                    {"role": "user", "content": context}
+                ]
             )
-
-            import json
-            ai_analysis = json.loads(response.choices[0].message.content.strip())
-
-            return {
-                "user_id": user_id,
-                "user_name": f"{user.first_name} {user.last_name}",
-                "analysis": ai_analysis,
-                "raw_metrics": {
-                    "tasks_completed": len(completed_tasks),
-                    "completion_rate": round((len(completed_tasks)/len(tasks)*100) if len(tasks) > 0 else 0, 1),
-                    "avg_completion_time_hours": round(avg_completion_time, 1),
-                    "commits_per_week": round(commits_per_week, 1),
-                    "lines_of_code": total_lines_added - total_lines_deleted,
-                    "collaboration_score": round((messages_sent + reactions_given) / 90, 2)
-                },
-                "generated_at": datetime.utcnow().isoformat()
-            }
-
+            return json.loads(response.choices[0].message.content)
         except Exception as e:
-            print(f"AI Analysis Error: {e}")
-            return {
-                "error": str(e),
-                "fallback": "AI analysis temporarily unavailable"
-            }
+            return {"error": str(e)}
 
     # =========================================================================
     # TEAM OPTIMIZATION
@@ -316,102 +169,31 @@ Be honest but constructive. Use data to support conclusions."""
     def generate_team_optimization_insights(self, project_id: int) -> Dict:
         """
         AI-powered team optimization recommendations
-        Analyzes: workload balance, collaboration patterns, bottlenecks
         """
         project = self.db.query(Project).filter(Project.id == project_id).first()
+        if not project: return {"error": "Project not found"}
 
-        if not project:
-            return {"error": "Project not found"}
-
-        # Get all project members
-        from app.models.project import ProjectMember
-        members = self.db.query(ProjectMember).filter(
-            ProjectMember.project_id == project_id
-        ).all()
-
+        members = self.db.query(ProjectMember).filter(ProjectMember.project_id == project_id).all()
         team_data = []
-        for member in members:
-            user = self.db.query(User).filter(User.id == member.user_id).first()
-            if not user:
-                continue
+        for m in members:
+            u = self.db.query(User).filter(User.id == m.user_id).first()
+            if u:
+                t_count = self.db.query(Task).filter(Task.owner_id == u.id, Task.project_id == project_id).count()
+                team_data.append(f"{u.first_name}: {t_count} tasks")
 
-            tasks = self.db.query(Task).filter(
-                Task.owner_id == user.id,
-                Task.project_id == project_id
-            ).all()
+        context = f"Project: {project.name}\nTeam workloads:\n" + "\n".join(team_data)
 
-            completed = sum(1 for t in tasks if t.status.value == "DONE")
-            in_progress = sum(1 for t in tasks if t.status.value == "IN_PROGRESS")
-            overdue = sum(1 for t in tasks if t.due_date and t.due_date < datetime.utcnow() and t.status.value != "DONE")
-
-            team_data.append({
-                "name": f"{user.first_name} {user.last_name}",
-                "role": member.role,
-                "tasks_total": len(tasks),
-                "tasks_completed": completed,
-                "tasks_in_progress": in_progress,
-                "tasks_overdue": overdue
-            })
-
-        # Prepare context
-        context = f"""
-Project: {project.name}
-Team Size: {len(team_data)}
-
-Team Member Workloads:
-{chr(10).join([f"- {m['name']} ({m['role']}): {m['tasks_total']} tasks ({m['tasks_completed']} done, {m['tasks_in_progress']} in progress, {m['tasks_overdue']} overdue)" for m in team_data])}
-"""
-
-        # Call GPT-4
         try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                response_format={"type": "json_object"},
                 messages=[
-                    {
-                        "role": "system",
-                        "content": """You are an expert project manager specializing in team optimization. Analyze this team and provide:
-
-1. WORKLOAD BALANCE ASSESSMENT
-2. BOTTLENECKS (who's overloaded, who's underutilized)
-3. COLLABORATION RECOMMENDATIONS
-4. TASK REDISTRIBUTION SUGGESTIONS
-
-Format as JSON:
-{
-  "balance_score": 0-100,
-  "issues": ["...", "..."],
-  "overloaded_members": ["name: reason"],
-  "underutilized_members": ["name: reason"],
-  "recommendations": ["...", "..."],
-  "suggested_reassignments": [
-    {"from": "Person A", "to": "Person B", "task_type": "...", "reason": "..."}
-  ]
-}
-
-Be specific and actionable."""
-                    },
-                    {
-                        "role": "user",
-                        "content": context
-                    }
-                ],
-                max_tokens=600,
-                temperature=0.7
+                    {"role": "system", "content": "Analyze team workload balance and return JSON with balance_score, issues, and recommendations."},
+                    {"role": "user", "content": context}
+                ]
             )
-
-            import json
-            optimization = json.loads(response.choices[0].message.content.strip())
-
-            return {
-                "project_id": project_id,
-                "team_size": len(team_data),
-                "optimization": optimization,
-                "team_metrics": team_data,
-                "generated_at": datetime.utcnow().isoformat()
-            }
-
+            return json.loads(response.choices[0].message.content)
         except Exception as e:
-            print(f"Team Optimization Error: {e}")
             return {"error": str(e)}
 
     # =========================================================================
@@ -421,138 +203,79 @@ Be specific and actionable."""
     def suggest_task_assignment(self, task_id: int) -> Dict:
         """
         AI suggests best team member for a specific task
-        Based on: skills, workload, past performance, availability
         """
         task = self.db.query(Task).filter(Task.id == task_id).first()
+        if not task: return {"error": "Task not found"}
 
-        if not task:
-            return {"error": "Task not found"}
-
-        # Get project team members
-        from app.models.project import ProjectMember
-        members = self.db.query(ProjectMember).filter(
-            ProjectMember.project_id == task.project_id
-        ).all()
-
+        members = self.db.query(ProjectMember).filter(ProjectMember.project_id == task.project_id).all()
         candidates = []
-        for member in members:
-            user = self.db.query(User).filter(User.id == member.user_id).first()
-            if not user:
-                continue
+        for m in members:
+            u = self.db.query(User).filter(User.id == m.user_id).first()
+            if u:
+                candidates.append(f"Name: {u.first_name}, Role: {m.role}, Skills: {u.skills}")
 
-            # Current workload
-            active_tasks = self.db.query(Task).filter(
-                Task.owner_id == user.id,
-                Task.status.in_(["TODO", "IN_PROGRESS"])
-            ).count()
-
-            candidates.append({
-                "user_id": user.id,
-                "name": f"{user.first_name} {user.last_name}",
-                "role": member.role,
-                "skills": user.skills or [],
-                "current_workload": active_tasks
-            })
-
-        # Prepare context
-        context = f"""
-Task to Assign:
-- Title: {task.title}
-- Description: {task.description}
-- Priority: {task.priority}
-- Estimated Hours: {task.estimated_hours or 'Not specified'}
-
-Available Team Members:
-{chr(10).join([f"- {c['name']} ({c['role']}): {c['current_workload']} active tasks, Skills: {', '.join(c['skills'])}" for c in candidates])}
-"""
+        context = f"Task: {task.title}\nDescription: {task.description}\nCandidates:\n" + "\n".join(candidates)
 
         try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                response_format={"type": "json_object"},
                 messages=[
-                    {
-                        "role": "system",
-                        "content": """You are an expert at task assignment optimization. Recommend the best person for this task.
-
-Format as JSON:
-{
-  "recommended_assignee": "Name",
-  "confidence": 0-100,
-  "reasoning": "...",
-  "alternative_assignees": [
-    {"name": "...", "reason": "..."}
-  ]
-}"""
-                    },
-                    {
-                        "role": "user",
-                        "content": context
-                    }
-                ],
-                max_tokens=300,
-                temperature=0.6
+                    {"role": "system", "content": "Suggest the best candidate for the task. Return JSON with recommended_assignee and reasoning."},
+                    {"role": "user", "content": context}
+                ]
             )
-
-            import json
-            suggestion = json.loads(response.choices[0].message.content.strip())
-
-            return {
-                "task_id": task_id,
-                "suggestion": suggestion,
-                "candidates": candidates,
-                "generated_at": datetime.utcnow().isoformat()
-            }
-
+            return json.loads(response.choices[0].message.content)
         except Exception as e:
-            print(f"Task Assignment Error: {e}")
             return {"error": str(e)}
 
+    # =========================================================================
+    # INTELLIGENCE SUMMARY (Enhanced with Documents)
+    # =========================================================================
 
     def generate_intelligence_summary(self, project_id: int, project_data: Dict) -> Dict:
         """
-        Generate a high-signal Project Intelligence Summary using the specific EM prompt.
+        Generate a high-signal Project Intelligence Summary.
+        Now enhanced with document-based deductions.
         """
+        project = self.db.query(Project).filter(Project.id == project_id).first()
+        
+        doc_knowledge = ""
+        if project and project.linked_documents:
+            doc_knowledge = "\n## DOCUMENT KNOWLEDGE BASE\n"
+            for doc in project.linked_documents:
+                if isinstance(doc, dict) and "extracted_text" in doc:
+                    doc_knowledge += f"### Insights from '{doc.get('name')}':\n{doc['extracted_text'][:3000]}\n---\n"
+
         prompt = f"""
 # Role
-You are an expert Engineering Manager with a focus on high-velocity delivery and architectural integrity. Your goal is to transform raw project telemetry (JSON) into a high-signal "Project Intelligence Summary" for the Project Lead.
+You are an expert Engineering Manager / Project Director. Your goal is to transform project telemetry AND internal document knowledge into a high-signal "Project Intelligence Summary".
 
 # Context
-You will be provided with a JSON object: `ComprehensiveProjectData`. 
+Telemetry Data: {project_data}
+{doc_knowledge}
 
 # Instructions
-Analyze the data and generate a report using the following structure. Maintain a tone that is concise, data-driven, and focused on unblocking the team.
+Analyze both the telemetry (velocity, PRs, tasks) AND the document content (requirements, strategy, research) to generate a report.
+If the documents contain specific goals, constraints, or technical details, use them to validate if the current progress (telemetry) aligns with the original vision.
 
-## 1. STRUCTURE & CONTENT
-- ## Quick Pulse: A single, punchy sentence describing the current momentum of the project based on activity levels and milestone progress.
-- ## Critical Path: Identify the single most significant bottleneck or the highest priority task that is currently gating further progress.
-- ## Recent Wins: A bulleted list summarizing the 3 most impactful recent activities (completed PRs, resolved bugs, or achieved milestones).
-- ## Team Guidance: Provide 2-3 pieces of actionable advice for the Project Lead to optimize the current sprint or improve team health.
+## Structure
+- ## Quick Pulse: One punchy sentence on current momentum and alignment with document-stated goals.
+- ## Document-Telemetry Gap: If the documents mention specific requirements that aren't reflected in the task list or activity, flag it here.
+- ## Critical Path: Single most significant bottleneck.
+- ## Strategic Wins: Bulleted list of impactful recent activities.
+- ## Director Advice: 2-3 pieces of actionable strategic advice.
 
-## 2. CONDITIONAL LOGIC (Dynamic Elements)
-- **Code Review Alert:** If the number of open Pull Requests (PRs) is > 5, explicitly flag a "Code Review Bottleneck" in the Critical Path section.
-- **Timeline Risk:** If `completion_percentage` is < 20% AND the deadline is less than 14 days away, add a "⚠️ Timeline Risk" warning to the Quick Pulse.
-- **Tech Stack Context:** Mention specific technologies or migrations explicitly (e.g., "The [Tech Stack] migration is [X]% complete").
-
-## 3. STYLE GUIDELINES
-- Use Markdown formatting.
-- Avoid corporate jargon or "fluff."
-- Prioritize quantitative data (percentages, counts, dates) over qualitative descriptions.
-- Use active voice (e.g., "Resolved memory leak" instead of "The memory leak was resolved").
-
-# Input Data
-[JSON DATA: {project_data}]
-
-# Output
-Return ONLY the Markdown string ready for frontend rendering.
+## Style
+- Professional, data-driven, active voice.
+- Use Markdown.
 """
 
         try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=1000,
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1500,
                 temperature=0.7
             )
 
@@ -561,15 +284,13 @@ Return ONLY the Markdown string ready for frontend rendering.
             return {
                 "summary": ai_summary,
                 "project_id": project_id,
-                "generated_at": datetime.utcnow().isoformat()
+                "generated_at": datetime.now(timezone.utc).isoformat()
             }
 
         except Exception as e:
             print(f"Intelligence Summary Error: {e}")
-            return {
-                "summary": "Unable to generate Project Intelligence Summary at this time.",
-                "error": str(e)
-            }
+            return {"summary": "Unable to generate summary.", "error": str(e)}
+
 
 def get_ai_service(db: Session) -> AIInsightsService:
     """Factory function"""
