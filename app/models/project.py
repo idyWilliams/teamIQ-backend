@@ -35,7 +35,10 @@ class Project(Base):
     # Step 1: Project Details
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    project_type = Column(Enum(ProjectType), default=ProjectType.SOFTWARE_DEVELOPMENT)
+    project_type = Column(
+        Enum(ProjectType, name="projecttype", create_type=False, values_callable=lambda x: [e.value for e in x]),
+        default=ProjectType.SOFTWARE_DEVELOPMENT
+    )
     industry = Column(String, nullable=True)  # e.g. Fintech, Healthcare
     methodology = Column(String, nullable=True)  # e.g. Agile, Scrum, Waterfall
     
@@ -49,7 +52,10 @@ class Project(Base):
 
     # Step 2: Project Management Tool
     pm_tool = Column(String, nullable=True)
-    pm_integration_method = Column(Enum(IntegrationMethod), nullable=True)
+    pm_integration_method = Column(
+        Enum(IntegrationMethod, values_callable=lambda x: [e.value for e in x]),
+        nullable=True
+    )
     pm_project_id = Column(String, nullable=True)
     pm_api_key = Column(String, nullable=True)
     pm_access_token = Column(String, nullable=True)
@@ -57,14 +63,20 @@ class Project(Base):
 
     # Step 3: Version Control
     vc_tool = Column(String, nullable=True)
-    vc_integration_method = Column(Enum(IntegrationMethod), nullable=True)
+    vc_integration_method = Column(
+        Enum(IntegrationMethod, values_callable=lambda x: [e.value for e in x]),
+        nullable=True
+    )
     vc_repository_url = Column(String, nullable=True)
     vc_api_key = Column(String, nullable=True)
     vc_access_token = Column(String, nullable=True)
 
     # Step 4: Communication Tool
     comm_tool = Column(String, nullable=True)
-    comm_integration_method = Column(Enum(IntegrationMethod), nullable=True)
+    comm_integration_method = Column(
+        Enum(IntegrationMethod, values_callable=lambda x: [e.value for e in x]),
+        nullable=True
+    )
     comm_channel_id = Column(String, nullable=True)
     comm_api_key = Column(String, nullable=True)
     comm_webhook_url = Column(String, nullable=True)
@@ -73,7 +85,10 @@ class Project(Base):
     # Metadata
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
-    status = Column(Enum(ProjectStatus), default=ProjectStatus.ACTIVE)
+    status = Column(
+        Enum(ProjectStatus, values_callable=lambda x: [e.value for e in x]),
+        default=ProjectStatus.ACTIVE
+    )
     pct_complete = Column(Float, default=0.0)
 
     createdAt = Column(DateTime, default=lambda: datetime.now(timezone.utc))
