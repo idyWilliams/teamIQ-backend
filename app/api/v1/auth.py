@@ -124,7 +124,7 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
             )
             
             if invitation_code:
-                # Validate invitation
+                # === TEAM USER REGISTRATION ===
                 invitation = get_invitation_by_code(db, invitation_code)
                 if not invitation or invitation.is_used:
                      raise HTTPException(status_code=400, detail="Invalid or used invitation code")
@@ -144,10 +144,37 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
                 db.commit()
                 is_new_user = True
             else:
-                # Sign up without invitation - only if allowed
-                # For this app, let's assume registration ALWAYS needs an invite
-                # unless we want to allow public signup
-                raise HTTPException(status_code=400, detail="User not found. Please use an invitation link to sign up.")
+                # === NEW ORGANIZATION REGISTRATION ===
+                # If no invitation code, we assume this person wants to create a new Organization
+                from app.repositories import organization_repository
+                
+                # Check if org name exists (placeholder name)
+                placeholder_org_name = f"{first_name}'s Organization"
+                base_name = placeholder_org_name
+                counter = 1
+                while organization_repository.get_organization_by_name(db, placeholder_org_name):
+                    placeholder_org_name = f"{base_name} {counter}"
+                    counter += 1
+
+                new_org = organization_repository.create_organization(
+                    db=db,
+                    org_data={
+                        "organization_name": placeholder_org_name,
+                        "team_size": "1-10", # Default
+                        "email": email,
+                        "country": "Unknown",
+                        "hashed_password": get_password_hash(random_pass),
+                        "role": UserRole.ORGANIZATION,
+                        "auth_provider": provider,
+                        "auth_id": str(user_info.get('sub') or user_info.get('id'))
+                    }
+                )
+                db.commit()
+                db.refresh(new_org)
+                
+                user_entity = new_org
+                entity_type = "organization"
+                is_new_user = True
     else:
         # Existing user - update provider info if not set
         if not user_entity.auth_provider or user_entity.auth_provider == 'local':

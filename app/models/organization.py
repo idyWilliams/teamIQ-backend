@@ -33,6 +33,11 @@ class Organization(Base):
     website = Column(String, nullable=True)
     country = Column(String, nullable=True)
     phone_number = Column(String, nullable=True)
+    
+    # Auth Provider
+    auth_provider = Column(String, nullable=True, default="local")
+    auth_id = Column(String, nullable=True)
+    
     onboarding_completed = Column(Boolean, default=False)
     onboarding_step = Column(Integer, default=0)
     onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)
