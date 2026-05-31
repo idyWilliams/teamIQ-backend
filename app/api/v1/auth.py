@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status, Request
 from sqlalchemy.orm import Session
 import datetime
+from typing import Optional
 
 from app.core.database import get_db
-from app.models.organization import Organization
+from app.models.organization import Organization, UserRole
 from app.repositories import user_repository, organization_repository
 from app.repositories.invitation_repository import get_invitation_by_code
 from app.core.hashing import verify_password, get_password_hash
@@ -24,10 +25,151 @@ from app.repositories.user_org_repository import link_user_to_org
 from app.schemas.user import UserCreate, UserOut
 from app.schemas.organization import OrganizationOut
 from app.schemas.auth import Token, PasswordResetRequest, PasswordResetConfirm, LoginRequest, RefreshTokenRequest
+from app.services.oauth_service import oauth
 
 router = APIRouter()
 
 
+# ----------------------------
+# OAUTH
+# ----------------------------
+
+@router.get("/oauth/{provider}/login")
+async def oauth_login(provider: str, request: Request, invitation_code: Optional[str] = None):
+    """
+    Returns the OAuth redirect URL for the specified provider.
+    Frontend should redirect the user to this URL.
+    """
+    client = getattr(oauth, provider, None)
+    if not client:
+        raise HTTPException(status_code=400, detail=f"Provider {provider} not supported")
+    
+    # Construct redirect URI (frontend callback URL)
+    # The frontend will receive the code and send it back to our callback endpoint
+    redirect_uri = request.url_for('oauth_callback', provider=provider)
+    
+    # We can pass invitation_code in the state if needed, or handle it on frontend
+    # But usually, it's easier if the frontend handles the redirect and then calls our callback
+    # However, if we want to follow Authlib's standard flow:
+    state_data = {}
+    if invitation_code:
+        state_data['invitation_code'] = invitation_code
+        
+    return await client.authorize_redirect(request, redirect_uri, **state_data)
+
+
+@router.get("/oauth/{provider}/callback", name="oauth_callback")
+async def oauth_callback(provider: str, request: Request, db: Session = Depends(get_db)):
+    """
+    Handles the OAuth callback from the provider.
+    This endpoint is called by the PROVIDER (or the frontend relaying the code).
+    """
+    client = getattr(oauth, provider, None)
+    if not client:
+        raise HTTPException(status_code=400, detail=f"Provider {provider} not supported")
+    
+    try:
+        token = await client.authorize_access_token(request)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"OAuth error: {str(e)}")
+
+    user_info = token.get('userinfo')
+    if not user_info:
+        # Fallback for providers that don't use OIDC userinfo (like GitHub)
+        if provider == 'github':
+            resp = await client.get('user', token=token)
+            user_info = resp.json()
+            # GitHub might not return email in 'user' if it's private
+            if not user_info.get('email'):
+                emails_resp = await client.get('user/emails', token=token)
+                emails = emails_resp.json()
+                primary_email = next((e['email'] for e in emails if e['primary']), emails[0]['email'])
+                user_info['email'] = primary_email
+        else:
+            raise HTTPException(status_code=400, detail="Failed to fetch user info from provider")
+
+    email = user_info.get('email').lower()
+    first_name = user_info.get('given_name') or user_info.get('name', '').split(' ')[0] or "User"
+    last_name = user_info.get('family_name') or (user_info.get('name', '').split(' ')[1] if ' ' in user_info.get('name', '') else "")
+    username = user_info.get('preferred_username') or user_info.get('login') or email.split('@')[0]
+
+    # Check if user already exists
+    user_entity = user_repository.get_user_by_email(db, email)
+    
+    is_new_user = False
+    entity_type = "user"
+    
+    if not user_entity:
+        # Check if they are an organization (organizations usually login via email/pass)
+        org_entity = organization_repository.get_organization_by_email(db, email)
+        if org_entity:
+            user_entity = org_entity
+            entity_type = "organization"
+        else:
+            # Registration Logic
+            invitation_code = request.query_params.get('invitation_code')
+            
+            # Use random password for OAuth users
+            import secrets
+            random_pass = secrets.token_urlsafe(32)
+            
+            user_create = UserCreate(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                username=username,
+                password=random_pass,
+                country="Unknown",
+                role=UserRole.INTERN
+            )
+            
+            if invitation_code:
+                # Validate invitation
+                invitation = get_invitation_by_code(db, invitation_code)
+                if not invitation or invitation.is_used:
+                     raise HTTPException(status_code=400, detail="Invalid or used invitation code")
+                
+                user_entity = user_repository.create_user(db, user_create)
+                user_entity.auth_provider = provider
+                user_entity.auth_id = str(user_info.get('sub') or user_info.get('id'))
+                db.flush()
+                
+                # Link to org
+                link_user_to_org(db, user_entity.id, invitation.organization_id)
+                
+                # Mark invitation used
+                invitation.is_used = True
+                invitation.accepted = True
+                invitation.status = "accepted"
+                db.commit()
+                is_new_user = True
+            else:
+                # Sign up without invitation - only if allowed
+                # For this app, let's assume registration ALWAYS needs an invite
+                # unless we want to allow public signup
+                raise HTTPException(status_code=400, detail="User not found. Please use an invitation link to sign up.")
+    else:
+        # Existing user - update provider info if not set
+        if not user_entity.auth_provider or user_entity.auth_provider == 'local':
+            user_entity.auth_provider = provider
+            user_entity.auth_id = str(user_info.get('sub') or user_info.get('id'))
+            db.commit()
+
+    # Generate tokens
+    access_token = create_access_token(data={"sub": email}, entity_type=entity_type)
+    refresh_token = create_refresh_token(data={"sub": email}, entity_type=entity_type)
+
+    # Redirect or return JSON?
+    # Usually, for callback endpoints called by the provider, we redirect back to frontend with tokens
+    from app.core.config import settings
+    frontend_url = f"{settings.APP_URL}/oauth-callback?access_token={access_token}&refresh_token={refresh_token}"
+    
+    # Distinguish if it's a new user for onboarding
+    if is_new_user:
+        frontend_url += "&new_user=true"
+        
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=frontend_url)
 
 
 @router.post("/register/user")

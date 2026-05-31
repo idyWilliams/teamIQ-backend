@@ -25,6 +25,10 @@ class User(Base):
     bio = Column(String, nullable=True)
     phone_number = Column(String, nullable=True)
     track = Column(String, nullable=True)
+    
+    # Auth Provider
+    auth_provider = Column(String, nullable=True, default="local") # local, google, github, microsoft
+    auth_id = Column(String, nullable=True) # ID from provider
 
 
     createdAt = Column(DateTime(timezone=True), server_default=func.now())

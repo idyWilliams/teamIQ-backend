@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from pathlib import Path
@@ -69,6 +70,10 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan
 )
+
+# Add Session Middleware for OAuth
+from app.core.config import settings
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 # CORS Middleware
 origins = [
