@@ -623,26 +623,61 @@ def get_project(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_or_organization)
 ):
-    """Get project details"""
-    project = db.query(Project).filter(Project.id == project_id).first()
+    """Get project details with granular access control"""
+    project = db.query(Project).options(
+        subqueryload(Project.members).joinedload(ProjectMember.user),
+        subqueryload(Project.resources).joinedload(ProjectResource.connection),
+        joinedload(Project.organization),
+        joinedload(Project.project_lead)
+    ).filter(Project.id == project_id).first()
 
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if isinstance(current_user, User):
+    # Authorization and Access Level Check
+    is_member = False
+    user_access_level = "limited"
+    
+    if isinstance(current_user, Organization):
+        if project.organization_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this project")
+        is_member = True
+        user_access_level = "full"
+    elif isinstance(current_user, User):
         user_org_ids = [org.id for org in current_user.organizations]
         if project.organization_id not in user_org_ids:
             raise HTTPException(status_code=403, detail="Not authorized to view this project")
-    elif isinstance(current_user, Organization):
-        if project.organization_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized to view this project")
+        
+        # Check if project member
+        if project.owner_id == current_user.id or project.project_lead_id == current_user.id:
+            is_member = True
+            user_access_level = "full"
+        else:
+            if any(m.user_id == current_user.id for m in project.members):
+                is_member = True
+                user_access_level = "full"
     else:
         raise HTTPException(status_code=403, detail="Invalid user type")
+
+    # Prepare Response
+    response_data = ProjectResponse.model_validate(project)
+    response_data.is_member = is_member
+    response_data.user_access_level = user_access_level
+
+    # Scrub sensitive data if access is limited
+    if user_access_level == "limited":
+        response_data.linked_documents = []
+        response_data.stacks = []
+        response_data.pm_tool = None
+        response_data.vc_tool = None
+        response_data.comm_tool = None
+        # We could also null out more specific integration fields if they were in the response
+        # but ProjectResponse already has a limited set of fields compared to ListItem
 
     return create_response(
         success=True,
         message="Project retrieved successfully",
-        data=ProjectResponse.model_validate(project)
+        data=response_data
     )
 
 
@@ -699,42 +734,93 @@ def list_projects(
 
     projects = query.all()
 
-    unique_projects = {project.id: project for project in projects}.values()
+    # Use a dictionary to keep track of projects and whether the current user is a member
+    unique_projects_map = {}
+    
+    for project in projects:
+        if project.id not in unique_projects_map:
+            # Check membership
+            is_member = False
+            user_access_level = "limited"
+            
+            if isinstance(current_user, Organization):
+                is_member = True
+                user_access_level = "full"
+            elif isinstance(current_user, User):
+                # Check if user is the owner or project lead
+                if project.owner_id == current_user.id or project.project_lead_id == current_user.id:
+                    is_member = True
+                    user_access_level = "full"
+                else:
+                    # Check the project_members relationship (already loaded)
+                    if any(m.user_id == current_user.id for m in project.members):
+                        is_member = True
+                        user_access_level = "full"
+            
+            unique_projects_map[project.id] = {
+                "project": project,
+                "is_member": is_member,
+                "user_access_level": user_access_level
+            }
 
     enriched_projects = []
-    for project in unique_projects:
-        # 1. Process members
-        member_details = [
-            ProjectMemberDetail(
-                id=member.id,
-                user_id=member.user.id,
-                user_name=f"{member.user.first_name} {member.user.last_name}",
-                user_email=member.user.email,
-                user_avatar=member.user.profile_image,
-                role=member.role,
-                external_mappings=member.external_mappings
-            ) for member in project.members if member.user
-        ]
+    for p_id, p_info in unique_projects_map.items():
+        project = p_info["project"]
+        is_member = p_info["is_member"]
+        user_access_level = p_info["user_access_level"]
 
-        # 2. Process integrated apps
-        app_details = [
-            IntegratedAppDetail(
-                id=res.id,
-                resource_name=res.resource_name,
-                resource_type=res.resource_type,
-                provider=res.connection.provider,
-                connection_id=res.connection_id
-            ) for res in project.resources if res.connection
-        ]
+        # 1. Process members (only if full access)
+        member_details = []
+        if user_access_level == "full":
+            member_details = [
+                ProjectMemberDetail(
+                    id=member.id,
+                    user_id=member.user.id,
+                    user_name=f"{member.user.first_name} {member.user.last_name}",
+                    user_email=member.user.email,
+                    user_avatar=member.user.profile_image,
+                    role=member.role,
+                    external_mappings=member.external_mappings
+                ) for member in project.members if member.user
+            ]
+
+        # 2. Process integrated apps (only if full access)
+        app_details = []
+        if user_access_level == "full":
+            app_details = [
+                IntegratedAppDetail(
+                    id=res.id,
+                    resource_name=res.resource_name,
+                    resource_type=res.resource_type,
+                    provider=res.connection.provider,
+                    connection_id=res.connection_id
+                ) for res in project.resources if res.connection
+            ]
 
         # 3. Get lead and org names
         project_lead_name = f"{project.project_lead.first_name} {project.project_lead.last_name}" if project.project_lead else None
         organization_name = project.organization.organization_name if project.organization else None
 
         # 4. Create the final response object
-        project_data = {k: v for k, v in project.__dict__.items() if k not in ['members', 'resources', 'organization', 'project_lead']}
+        project_dict = {k: v for k, v in project.__dict__.items() if k not in ['members', 'resources', 'organization', 'project_lead']}
+        
+        # Scrub sensitive fields if access is limited
+        if user_access_level == "limited":
+            # Keep basic fields, scrub sync/config fields
+            fields_to_scrub = [
+                'pm_tool', 'pm_integration_method', 'pm_project_id', 'pm_api_key', 'pm_access_token', 'pm_workspace_url',
+                'vc_tool', 'vc_integration_method', 'vc_repository_url', 'vc_api_key', 'vc_access_token',
+                'comm_tool', 'comm_integration_method', 'comm_channel_id', 'comm_api_key', 'comm_webhook_url', 'comm_notifications',
+                'linked_documents', 'stacks'
+            ]
+            for field in fields_to_scrub:
+                if field in project_dict:
+                    project_dict[field] = None
+
         enriched_project = ProjectListItemResponse(
-            **project_data,
+            **project_dict,
+            is_member=is_member,
+            user_access_level=user_access_level,
             members=member_details,
             integrated_apps=app_details,
             project_lead_name=project_lead_name,

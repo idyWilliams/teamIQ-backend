@@ -184,6 +184,10 @@ class ProjectResponse(BaseModel):
     current_milestone: Optional[str] = "Initial Development"
     linked_documents: List[Dict] = []
 
+    # Access control
+    is_member: bool = False
+    user_access_level: str = "limited" # "full", "limited", or "none"
+
     # Integration details
     pm_tool: Optional[str]
     vc_tool: Optional[str]
@@ -256,6 +260,10 @@ class ProjectListItemResponse(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     current_milestone: Optional[str] = "Initial Development"
+
+    # Access control
+    is_member: bool = False
+    user_access_level: str = "limited" # "full", "limited", or "none"
 
     # Integration details
     pm_tool: Optional[str]
